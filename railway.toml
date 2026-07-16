@@ -1,0 +1,10 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @inazuma/shared run build && pnpm --filter backend exec prisma generate && pnpm --filter backend run build"
+
+[deploy]
+startCommand = "pnpm --filter backend run start:prod"
+releaseCommand = "pnpm --filter backend exec prisma migrate deploy"
+healthcheckPath = "/"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

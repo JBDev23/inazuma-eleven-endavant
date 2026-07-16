@@ -1,0 +1,177 @@
+[
+    {
+      "name": "F-Básica",
+      "playerCount": 11,
+      "type": "BALANCED",
+      "price": 0,
+      "positions": "4-4-2"
+    },
+    {
+      "name": "F-Zona Muerta",
+      "playerCount": 11,
+      "type": "OFFENSIVE",
+      "price": 1200,
+      "positions": "4-3-3"
+    },
+    {
+      "name": "F-Escudo",
+      "playerCount": 11,
+      "type": "DEFENSIVE",
+      "price": 900,
+      "positions": "5-4-1"
+    },
+    {
+      "name": "F-Ataque",
+      "playerCount": 11,
+      "type": "OFFENSIVE",
+      "price": 800,
+      "positions": "3-4-3"
+    },
+    {
+      "name": "F-Árbol Navidad",
+      "playerCount": 11,
+      "type": "BALANCED",
+      "price": 1500,
+      "positions": "4-3-2-1"
+    },
+    {
+      "name": "F-Doble M",
+      "playerCount": 11,
+      "type": "BALANCED",
+      "price": 2000,
+      "positions": "3-5-2"
+    },
+    {
+      "name": "F-Falange",
+      "playerCount": 11,
+      "type": "DEFENSIVE",
+      "price": 1800,
+      "positions": "5-3-2"
+    },
+    {
+      "name": "F-Mariposa",
+      "playerCount": 11,
+      "type": "OFFENSIVE",
+      "price": 2500,
+      "positions": "3-2-2-3"
+    },
+    {
+      "name": "F-Mini Básica",
+      "playerCount": 4,
+      "type": "BALANCED",
+      "price": 0,
+      "positions": "1-1-1"
+    },
+    {
+      "name": "F-Mini Flecha",
+      "playerCount": 4,
+      "type": "OFFENSIVE",
+      "price": 300,
+      "positions": "0-1-2"
+    },
+    {
+      "name": "F-Mini Escudo",
+      "playerCount": 4,
+      "type": "DEFENSIVE",
+      "price": 300,
+      "positions": "2-1-0"
+    },
+    {
+      "name": "F-Mini Línea",
+      "playerCount": 4,
+      "type": "BALANCED",
+      "price": 450,
+      "positions": "0-3-0"
+    },
+    {
+      "name": "F-Mini Asalto",
+      "playerCount": 4,
+      "type": "OFFENSIVE",
+      "price": 500,
+      "positions": "1-0-2"
+    },
+    {
+      "name": "F-Mini Triángulo",
+      "playerCount": 4,
+      "type": "BALANCED",
+      "price": 400,
+      "positions": "1-2-0"
+    },
+    {
+      "name": "F-Zona Imperial",
+      "playerCount": 11,
+      "type": "OFFENSIVE",
+      "price": 2500,
+      "positions": "4-5-1"
+    },
+    {
+      "name": "F-Maldición",
+      "playerCount": 11,
+      "type": "BALANCED",
+      "price": 1200,
+      "positions": "4-3-3"
+    },
+    {
+      "name": "F-Vuelo Salvaje",
+      "playerCount": 11,
+      "type": "OFFENSIVE",
+      "price": 1300,
+      "positions": "4-4-2"
+    },
+    {
+      "name": "F-Red Neuronal",
+      "playerCount": 11,
+      "type": "DEFENSIVE",
+      "price": 1800,
+      "positions": "3-6-1"
+    },
+    {
+      "name": "F-Muro Manga",
+      "playerCount": 11,
+      "type": "DEFENSIVE",
+      "price": 1000,
+      "positions": "5-4-1"
+    },
+    {
+      "name": "F-Formación Ninja",
+      "playerCount": 11,
+      "type": "OFFENSIVE",
+      "price": 1600,
+      "positions": "3-4-3"
+    },
+    {
+      "name": "F-Muro Infinito",
+      "playerCount": 11,
+      "type": "DEFENSIVE",
+      "price": 2200,
+      "positions": "5-4-1"
+    },
+    {
+      "name": "F-Tridente Ofensivo",
+      "playerCount": 11,
+      "type": "OFFENSIVE",
+      "price": 1900,
+      "positions": "4-3-3"
+    },
+    {
+      "name": "F-Inazuma Clásico",
+      "playerCount": 11,
+      "type": "BALANCED",
+      "price": 2000,
+      "positions": "4-4-2"
+    },
+    {
+      "name": "F-Retaguardia",
+      "playerCount": 11,
+      "type": "DEFENSIVE",
+      "price": 900,
+      "positions": "4-5-1"
+    },
+    {
+      "name": "F-Falange Celestial",
+      "playerCount": 11,
+      "type": "OFFENSIVE",
+      "price": 3000,
+      "positions": "3-5-2"
+    }
+  ]

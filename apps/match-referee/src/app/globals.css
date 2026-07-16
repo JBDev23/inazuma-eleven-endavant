@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+@source "../**/*.{js,ts,jsx,tsx,mdx}";
+
+@theme {
+  --color-chalkboard: #1a1f16;
+  --color-chalkboard-light: #2a3324;
+  --color-chalk: #e8e4d9;
+  --color-chalk-muted: #9ca38f;
+  --color-neon-green: #39ff14;
+  --color-neon-red: #ff3131;
+  --color-neon-yellow: #ffe600;
+
+  --font-display: var(--font-kanit), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-teko), ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    height: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    min-height: 100%;
+    min-height: 100dvh;
+    color: var(--color-chalk);
+    background-color: var(--color-chalkboard);
+    font-family: var(--font-display);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    touch-action: manipulation;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@utility chalkboard-texture {
+  background-color: var(--color-chalkboard);
+  background-image:
+    radial-gradient(
+      ellipse at 20% 50%,
+      rgba(57, 255, 20, 0.03) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse at 80% 20%,
+      rgba(255, 230, 0, 0.04) 0%,
+      transparent 40%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 255, 255, 0.015) 2px,
+      rgba(255, 255, 255, 0.015) 4px
+    );
+}
+
+@keyframes wind-drift {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateX(350%);
+    opacity: 0;
+  }
+}
+
+@keyframes snow-fall {
+  0% {
+    transform: translateY(-10px);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(80px);
+    opacity: 0.2;
+  }
+}
+
+@utility animate-wind-drift {
+  animation: wind-drift 2.5s ease-in-out infinite;
+}
+
+@utility animate-snow-fall {
+  animation: snow-fall 3s linear infinite;
+}
+
+@utility scanlines {
+  &::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.08) 2px,
+      rgba(0, 0, 0, 0.08) 4px
+    );
+    z-index: 50;
+  }
+}
+
+@utility scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

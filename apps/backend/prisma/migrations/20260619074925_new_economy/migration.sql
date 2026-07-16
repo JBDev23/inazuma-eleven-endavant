@@ -1,0 +1,26 @@
+-- CreateEnum
+CREATE TYPE "TransactionType" AS ENUM ('INTERNAL', 'EXTERNAL');
+
+-- AlterTable
+ALTER TABLE "UserClub" ADD COLUMN     "pc" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "pe" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "pp" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "yens" INTEGER NOT NULL DEFAULT 0;
+
+-- CreateTable
+CREATE TABLE "Transaction" (
+    "id" SERIAL NOT NULL,
+    "clubId" TEXT NOT NULL,
+    "type" "TransactionType" NOT NULL DEFAULT 'INTERNAL',
+    "description" TEXT NOT NULL,
+    "amountPP" INTEGER NOT NULL DEFAULT 0,
+    "amountPE" INTEGER NOT NULL DEFAULT 0,
+    "amountYens" INTEGER NOT NULL DEFAULT 0,
+    "amountPC" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Transaction_pkey" PRIMARY KEY ("id")
+);
+
+-- AddForeignKey
+ALTER TABLE "Transaction" ADD CONSTRAINT "Transaction_clubId_fkey" FOREIGN KEY ("clubId") REFERENCES "UserClub"("id") ON DELETE CASCADE ON UPDATE CASCADE;

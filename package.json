@@ -1,0 +1,18 @@
+{
+  "name": "inazuma-eleven-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.29.3",
+  "scripts": {
+    "dev": "pnpm --filter @inazuma/shared run build && concurrently \"pnpm --filter @inazuma/shared run dev\" \"pnpm --filter backend run start:dev\" \"pnpm --filter frontend run dev\" \"pnpm --filter match-referee run dev\"",
+    "test": "pnpm --filter @inazuma/shared run test && pnpm --filter backend run test && pnpm --filter match-referee run test",
+    "db:up": "docker-compose up -d",
+    "db:seed": "pnpm --filter backend run seed",
+    "build:shared": "pnpm --filter @inazuma/shared run build",
+    "build:backend": "pnpm --filter @inazuma/shared run build && pnpm --filter backend exec prisma generate && pnpm --filter backend run build",
+    "build:frontend": "pnpm --filter @inazuma/shared run build && pnpm --filter frontend run build",
+    "build:match-referee": "pnpm --filter @inazuma/shared run build && pnpm --filter match-referee run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

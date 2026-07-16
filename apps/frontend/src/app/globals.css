@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --color-raimon-blue: #1e3a8a;
+  --color-lightning-yellow: #facc15;
+  --color-spirit-red: #e11d48;
+  --color-field-green: #10b981;
+
+  --font-display: var(--font-russo), ui-sans-serif, sans-serif;
+  --font-body: var(--font-montserrat), ui-sans-serif, sans-serif;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-body);
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    /* Firefox */
+    scrollbar-width: none;
+    /* IE y Edge */
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    /* Chrome, Safari y Opera */
+    display: none;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-150%) skewX(-20deg);
+  }
+  75%, 100% {
+    transform: translateX(200%) skewX(-20deg);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 3s infinite ease-in-out;
+}

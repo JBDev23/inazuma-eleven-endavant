@@ -1,0 +1,444 @@
+// backend/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==========================================
+// 🎯 ENUMS
+// ==========================================
+
+enum TeamType {
+  CLUB
+  CENTRAL
+}
+
+enum MoveType {
+  SHOOT    // Tiro
+  DRIBBLE  // Regate
+  BLOCK    // Defensa
+  CATCH    // Parada
+  SKILL    // Habilidad Pasiva
+}
+
+enum EvolutionPath {
+  SHIN     // Evoluciona: Normal -> Kai -> Shin (o + -> ++)
+  L_G      // Evoluciona: L1 -> L2 -> L3 -> L4 -> L5 (o G1 a G5)
+  NONE     // No evoluciona
+}
+
+enum EvolutionSpeed {
+  FAST     // Rápida
+  MEDIUM   // Normal
+  SLOW     // Lenta
+  NONE     // Sin velocidad
+}
+
+enum FormationType {
+  OFFENSIVE
+  DEFENSIVE
+  BALANCED
+}
+
+enum TransactionType {
+  INTERNAL
+  EXTERNAL
+}
+
+enum ItemType {
+  BOOTS
+  GLOVES
+  BRACELET
+  PENDANT
+}
+
+enum ConsumableCategory {
+  WATER   // Recupera GP
+  FOOD    // Recupera TP
+  SPECIAL // Futuros: espionaje, etc.
+}
+
+enum ConsumableEffect {
+  RESTORE_GP_PERCENT
+  RESTORE_TP_PERCENT
+  REVEAL_OPPONENT_COMMAND // Futuro: ver comando del rival
+}
+
+enum FacilityType {
+  FIELD
+  STANDS
+  BENCHES
+  SHOP
+  TRAINING
+  CLINIC
+  LAB
+}
+
+// ==========================================
+// 🎯 MODELOS DE EQUIPOS Y USUARIOS
+// ==========================================
+
+model Team {
+  id        Int      @id @default(autoincrement())
+  slug      String   @unique
+  name      String   @unique
+  type      TeamType @default(CLUB)
+  mapData   Json?
+  
+  // Jugadores que pertenecen originalmente a este equipo en el Lore
+  players   Player[] @relation("LoreTeam")
+  coaches  Coach[]  @relation("LoreTeamCoaches")
+}
+
+model UserClub {
+  id           String   @id @default(uuid())
+  name         String   @unique // Ej: "Los Chavales FC"
+  password     String
+  baseTeamSlug String?
+  shieldUrl    String   @default("https://res.cloudinary.com/ddfhquqsb/image/upload/f_auto,q_auto/v1781867849/default_shield_h3evcz.png")
+
+  pp           Int      @default(1000) // Puntos de Pasión
+  pe           Int      @default(0) // Puntos de Experiencia (Bolsa)
+  yens         Int      @default(0) // Yenes
+  pc           Int      @default(0) // Puntos de Característica
+  
+  // Jugadores reales que este participante tiene en su plantilla actual
+  roster       Player[] @relation("CurrentOwner")
+
+  // ENTRENADORES
+  coaches       Coach[] @relation("ClubCoaches")
+  activeCoachId Int?
+  activeCoach   Coach?  @relation("ActiveClubCoach", fields: [activeCoachId], references: [id])
+
+  // El progreso del usuario en los mapas
+  unlockedNodes UnlockedNode[]
+
+  // 🎯 TÁCTICAS: Formaciones Activas seleccionadas por el usuario
+  activeFormation11Id Int?
+  activeFormation4Id  Int?
+
+  formation11 Formation? @relation("ClubFormation11", fields: [activeFormation11Id], references: [id])
+  formation4  Formation? @relation("ClubFormation4", fields: [activeFormation4Id], references: [id])
+
+  // 🎯 TÁCTICAS: Inventario de formaciones que el club ha comprado/desbloqueado
+  formations ClubFormation[]
+
+  // 🎯 OBJETOS: Inventario de equipamiento del club
+  items ClubItem[]
+
+  // 🎯 CONSUMIBLES: Inventario de objetos de un solo uso (partido)
+  consumables ClubConsumable[]
+
+  facilities ClubFacility[]
+
+  transactions Transaction[]
+}
+
+model ClubFacility {
+  id           String       @id @default(uuid())
+  clubId       String
+  facility     FacilityType
+  level        Int          @default(0)
+  upgradingTo  Int?
+  pitchElement String?
+
+  club UserClub @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, facility])
+}
+
+// ==========================================
+// 🎯 MODELO DE HISTORIAL DE ECONOMÍA
+// ==========================================
+
+model Transaction {
+  id          Int             @id @default(autoincrement())
+  clubId      String
+  type        TransactionType @default(INTERNAL)
+  
+  // Motivo de la transacción (Ej: "Victoria 3-0", "Asistencia a entrenamiento real", "Fichaje de Axel Blaze")
+  description String          
+
+  // Variación de recursos (pueden ser negativos si es un gasto)
+  amountPP    Int             @default(0)
+  amountPE    Int             @default(0)
+  amountYens  Int             @default(0)
+  amountPC    Int             @default(0)
+
+  createdAt   DateTime        @default(now())
+
+  club        UserClub        @relation(fields: [clubId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 🎯 MODELO DE ENTRENADOR
+// ==========================================
+
+model Coach {
+  id          Int       @id @default(autoincrement())
+  name        String
+  nickname    String?
+  spriteUrl   String?
+  season      Int      @default(1)
+  price       Int       @default(500)
+
+  // Progresión
+  level       Int       @default(1)
+  experience  Int       @default(0)
+
+  // MULTIPLICADORES TÁCTICOS EN JSON (Ej: {"gp": 1.0, "kick": 1.2, "speed": 1.1})
+  baseModifiers Json      @default("{}")
+  maxModifiers  Json      @default("{}")
+
+  isFreeAgent Boolean   @default(false)
+
+  // Relaciones del Lore
+  teamId      Int
+  team        Team      @relation("LoreTeamCoaches", fields: [teamId], references: [id])
+
+  // Formaciones que aporta este entrenador al sentarse en el banquillo
+  formations  Formation[]
+
+  // ¿Quién lo tiene fichado en la vida real?
+  ownerId     String?
+  owner       UserClub? @relation("ClubCoaches", fields: [ownerId], references: [id])
+  
+  // Relación inversa para Prisma (Saber en qué clubes está como ACTIVO)
+  activeAtClub UserClub[] @relation("ActiveClubCoach")
+}
+
+// ==========================================
+// 🎯 MODELO DE JUGADOR
+// ==========================================
+
+model Player {
+  id          Int      @id @default(autoincrement())
+  name        String
+  nickname    String?
+  jpName      String?
+  position    String
+  element     String
+  season      Int      @default(1)
+  spriteUrl   String?
+  
+  price       Int      @default(100)
+
+  // Niveles y Experiencia
+  level       Int      @default(1)
+  experience  Int      @default(0)
+
+  // ESTADÍSTICAS EN JSON (Ej: {"gp": 30, "tp": 26, "kick": 12, "body": 10...})
+  baseStats   Json     @default("{}")
+  maxStats    Json     @default("{}")
+
+  // Mejoras permanentes con PC (Ej: {"kick": 2, "speed": 1}) — viajan con el jugador
+  statBonuses Json     @default("{}")
+
+  isFreeAgent Boolean  @default(false)
+
+  // Relaciones del Lore (De dónde viene)
+  teamId      Int
+  team        Team     @relation("LoreTeam", fields: [teamId], references: [id])
+  
+  // El repertorio de técnicas de este jugador
+  moves       PlayerMove[]
+
+  // ¿Quién lo tiene AHORA MISMO en la vida real?
+  ownerId     String?
+  owner       UserClub? @relation("CurrentOwner", fields: [ownerId], references: [id])
+
+  // Historial de usuarios que han pagado el "peaje"
+  unlockedBy  UnlockedNode[]
+
+  // 🎯 CONVOCATORIA Y ALINEACIONES
+  // Estos campos se deben resetear a null/false si el jugador es vendido
+  isActiveRoster Boolean @default(false) // ¿Es uno de los 16 convocados?
+  position11     Int?    // Posición en el campo (1-11 titular, 12-16 suplente)
+  position4      Int?    // Posición en pachanga (1-4 titular)
+
+  // 🎯 EQUIPAMIENTO
+  primaryItemId   Int?
+  secondaryItemId Int?
+  primaryItem     Item? @relation("PrimaryItem", fields: [primaryItemId], references: [id])
+  secondaryItem   Item? @relation("SecondaryItem", fields: [secondaryItemId], references: [id])
+}
+
+// ==========================================
+// 🎯 TÁCTICAS Y FORMACIONES
+// ==========================================
+
+// El catálogo maestro de formaciones del juego
+model Formation {
+  id          Int           @id @default(autoincrement())
+  name        String        @unique // Ej: "F-Básica", "F-Autobús"
+  playerCount Int           // 4 (Pachanga) u 11 (Partido)
+  type        FormationType
+  price       Int           @default(0) // 0 = Gratis por defecto
+  
+  // Guardaremos un JSON con las coordenadas o configuración de posiciones
+  // Ej: [{"slot": 1, "role": "GK", "x": 10, "y": 50}, ...]
+  positions   Json          
+
+  // Relaciones
+  clubs       ClubFormation[]
+  clubsUsing11 UserClub[]   @relation("ClubFormation11")
+  clubsUsing4  UserClub[]   @relation("ClubFormation4")
+
+  coaches     Coach[]
+}
+
+// Relación: Qué formaciones ha desbloqueado cada club
+model ClubFormation {
+  clubId      String
+  formationId Int
+  unlockedAt  DateTime @default(now())
+
+  club        UserClub  @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  formation   Formation @relation(fields: [formationId], references: [id], onDelete: Cascade)
+
+  @@id([clubId, formationId])
+}
+
+// ==========================================
+// 🎯 OBJETOS DE EQUIPAMIENTO
+// ==========================================
+
+model Item {
+  id    Int      @id @default(autoincrement())
+  name  String   @unique
+  type  ItemType
+  price Int      @default(100)
+  stats Json     @default("{}")
+
+  clubInventory    ClubItem[]
+  primaryEquipped  Player[] @relation("PrimaryItem")
+  secondaryEquipped Player[] @relation("SecondaryItem")
+}
+
+model ClubItem {
+  clubId   String
+  itemId   Int
+  quantity Int      @default(0)
+
+  club UserClub @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  item Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([clubId, itemId])
+}
+
+// ==========================================
+// 🎯 CONSUMIBLES (Un solo uso en partido)
+// ==========================================
+
+model Consumable {
+  id          Int                @id @default(autoincrement())
+  name        String             @unique
+  category    ConsumableCategory
+  effect      ConsumableEffect
+  /** Porcentaje de recuperación (25/50/75/100) u otros parámetros numéricos futuros */
+  effectValue Int                @default(0)
+  price       Int                @default(100)
+  description String?
+  imageUrl    String?
+
+  clubInventory ClubConsumable[]
+}
+
+model ClubConsumable {
+  clubId       String
+  consumableId Int
+  quantity     Int      @default(0)
+
+  club       UserClub   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  consumable Consumable @relation(fields: [consumableId], references: [id], onDelete: Cascade)
+
+  @@id([clubId, consumableId])
+}
+
+// ==========================================
+// 🎯 LA TÉCNICA BASE (El Manual General)
+// ==========================================
+
+model Move {
+  id             Int            @id @default(autoincrement())
+  name           String         @unique
+  
+  type           MoveType       // SHOOT, DRIBBLE, BLOCK, CATCH, SKILL
+  element        String         // Fuego, Bosque, Aire, Montaña, Neutro
+  
+  foulRate       Float          @default(0) // Probabilidad de falta (Ej: 1.0 = 1%)
+  
+  basePower      Int            // Poder Base
+  maxPower       Int            // Poder al Máximo Nivel
+  tpCost         Int            // Coste de Energía (TP)
+  
+  secondaryType  String?        // Ej: "Long Shoot", "Block Shoot"
+  
+  evolutionPath  EvolutionPath  @default(NONE) // SHIN o L_G
+  evolutionSpeed EvolutionSpeed @default(NONE) // FAST, MEDIUM, SLOW
+
+  players        PlayerMove[]
+}
+
+// ==========================================
+// 🎯 PROGRESO DE LA TÉCNICA POR JUGADOR
+// ==========================================
+
+model PlayerMove {
+  playerId    Int
+  moveId      Int
+  
+  unlockLevel Int @default(1) 
+  
+  uses        Int @default(0) // Puntos de Dominio / Veces usada
+  moveLevel   Int @default(1) // (1=Normal, 2=Kai/L2, 3=Shin/L3...)
+
+  player      Player @relation(fields: [playerId], references: [id])
+  move        Move   @relation(fields: [moveId], references: [id])
+
+  @@id([playerId, moveId]) // Clave primaria compuesta
+}
+
+// ==========================================
+// 🎯 CONFIGURACIÓN GLOBAL DE XP DE PARTIDO
+// ==========================================
+
+model GameSettings {
+  id              Int @id @default(1)
+  currentSession  Int @default(1)
+}
+
+model SessionXpConfig {
+  id                  Int   @id @default(autoincrement())
+  session             Int   @unique
+  minXp               Int
+  maxXp               Int
+  /** Multiplicador de XP de pachanga sobre min/max del partido oficial */
+  pachangaMultiplier  Float @default(0.2)
+  /** Recompensa al club ganador */
+  winnerRewardPp      Int   @default(0)
+  winnerRewardYens    Int   @default(0)
+}
+
+// ==========================================
+// 🎯 MAPAS Y PROGRESO DE USUARIOS
+// ==========================================
+
+// EL "PEAJE": Registra que un club ha desbloqueado una casilla del mapa
+model UnlockedNode {
+  id         String   @id @default(uuid())
+  userClubId String
+  playerId   Int
+  
+  userClub   UserClub @relation(fields: [userClubId], references: [id])
+  player     Player   @relation(fields: [playerId], references: [id])
+  
+  unlockedAt DateTime @default(now())
+
+  // Un club no puede desbloquear al mismo jugador dos veces en el mapa
+  @@unique([userClubId, playerId]) 
+}
