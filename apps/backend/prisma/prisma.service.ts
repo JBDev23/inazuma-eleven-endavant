@@ -9,13 +9,28 @@ dotenv.config();
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error('DATABASE_URL is not set');
+    }
+
+    const pool = new Pool({
+      connectionString,
+      // Neon compute can be cold; give it time to wake up
+      connectionTimeoutMillis: 20_000,
+      max: 10,
+    });
     const adapter = new PrismaPg(pool);
     super({ adapter });
   }
 
   async onModuleInit() {
-    await this.$connect();
+    try {
+      await this.$connect();
+    } catch (error) {
+      console.error('Failed to connect to database:', error);
+      throw error;
+    }
   }
 
   async onModuleDestroy() {

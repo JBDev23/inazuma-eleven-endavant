@@ -6,5 +6,6 @@ buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @inazuma/shared 
 startCommand = "pnpm --filter backend run start:prod"
 releaseCommand = "pnpm --filter backend exec prisma migrate deploy"
 healthcheckPath = "/"
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
