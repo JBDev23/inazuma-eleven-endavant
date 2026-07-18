@@ -18,16 +18,18 @@ export function CityGroundLayer({ tier, className = '' }: CityGroundLayerProps) 
     return { x, y, r, shade: i % 3 };
   });
 
-  const flowers =
+  const flowers: Array<[number, number, string]> =
     tier >= 2
-      ? [
-          [18, 85, '#f472b6'],
-          [82, 12, '#fbbf24'],
-          [45, 92, '#a78bfa'],
-          [70, 88, '#f87171'],
-          [25, 15, '#fbbf24'],
-          [90, 45, '#f472b6'],
-        ].slice(0, tier >= 3 ? 6 : 3)
+      ? (
+          [
+            [18, 85, '#f472b6'],
+            [82, 12, '#fbbf24'],
+            [45, 92, '#a78bfa'],
+            [70, 88, '#f87171'],
+            [25, 15, '#fbbf24'],
+            [90, 45, '#f472b6'],
+          ] as Array<[number, number, string]>
+        ).slice(0, tier >= 3 ? 6 : 3)
       : [];
 
   return (

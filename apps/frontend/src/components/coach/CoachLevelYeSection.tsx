@@ -189,8 +189,10 @@ export function CoachLevelYeSection({
       setIsProcessing(true);
       const allocations = Array.from({ length: yeCount }, () => ({ coachId: coach.id }));
       await api.market.redeemYe(clubId, allocations);
-      const updated = coachPreview ?? { level: coach.level, experience: coach.experience };
-      onRedeemComplete?.({ level: updated.newLevel, experience: updated.newXp });
+      onRedeemComplete?.({
+        level: coachPreview?.newLevel ?? coach.level,
+        experience: coachPreview?.newXp ?? coach.experience,
+      });
       setStep("idle");
       setYeCount(1);
       setIsOpen(false);

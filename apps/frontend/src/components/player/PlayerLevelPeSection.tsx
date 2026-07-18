@@ -189,8 +189,10 @@ export function PlayerLevelPeSection({
       setIsProcessing(true);
       const allocations = Array.from({ length: peCount }, () => ({ playerId: player.id }));
       await api.market.redeemPe(clubId, allocations);
-      const updated = playerPreview ?? { level: player.level, experience: player.experience };
-      onRedeemComplete?.({ level: updated.newLevel, experience: updated.newXp });
+      onRedeemComplete?.({
+        level: playerPreview?.newLevel ?? player.level,
+        experience: playerPreview?.newXp ?? player.experience,
+      });
       setStep("idle");
       setPeCount(1);
       setIsOpen(false);
