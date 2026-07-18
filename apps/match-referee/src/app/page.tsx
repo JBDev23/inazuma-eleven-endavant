@@ -12,7 +12,7 @@ import {
   isMatchXpApplied,
 } from "@/lib/offline-storage";
 
-const MENU_VIDEO = "/background.webm";
+const MENU_VIDEO = "/Background.webm";
 
 function PendingUploadBanner({
   pendingCount,
