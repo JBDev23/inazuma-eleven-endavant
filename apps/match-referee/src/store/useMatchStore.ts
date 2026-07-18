@@ -21,6 +21,7 @@ import {
   inferBurningPhaseUsedFromLegacyState,
   type BurningPhaseState,
   type BurningPhaseUsedState,
+  type MoveUsageRecord,
 } from "@inazuma/shared";
 import { MatchFormat } from "@/components/MatchFormatSelector";
 import type { TimeOfDay } from "@/components/TimeOfDaySelector";
