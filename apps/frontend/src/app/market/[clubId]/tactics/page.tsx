@@ -65,6 +65,7 @@ export default function TacticsPage({ params }: { params: Promise<{ clubId: stri
       ...getFallbackFormation(playerCount),
       unlocked: false,
       unlockedByCoach: false,
+      ownedByClub: false,
       isActive11: false,
       isActive4: false,
     };
