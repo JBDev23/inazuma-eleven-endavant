@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Package, ShoppingBag } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Package, ShoppingBag } from "lucide-react";
 import type { ClubItemWithDetails, ClubResources, Coach, Item, ItemType, ClubFacilityRecord } from "@inazuma/shared";
 import {
   canAffordResource,
@@ -14,9 +14,10 @@ import {
   resolveClubFacilities,
   type StatKey,
 } from "@inazuma/shared";
-import { api } from "@/services/api";
+import { api, getApiErrorMessage } from "@/services/api";
 import { ClubResourcesDisplay } from "@/components/economy/ClubResourcesDisplay";
 import { ResourceCostBadge } from "@/components/economy/ResourceCostBadge";
+import { MarketRequestState } from "@/components/market/MarketRequestState";
 
 const STAT_LABELS: Record<StatKey, string> = {
   gp: "GP",
@@ -104,8 +105,12 @@ export default function ItemsShopPage({ params }: { params: Promise<{ clubId: st
   const [facilities, setFacilities] = useState<ClubFacilityRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const loadShop = async () => {
+    setIsLoading(true);
+    setLoadError(null);
     try {
       const [items, clubItems, club] = await Promise.all([
         api.market.getItemCatalog(),
@@ -118,6 +123,7 @@ export default function ItemsShopPage({ params }: { params: Promise<{ clubId: st
       setFacilities(club.facilities ?? []);
     } catch (error) {
       console.error("Error cargando tienda de objetos", error);
+      setLoadError(error);
     } finally {
       setIsLoading(false);
     }
@@ -132,22 +138,28 @@ export default function ItemsShopPage({ params }: { params: Promise<{ clubId: st
   const handleBuy = async (itemId: number) => {
     try {
       setIsProcessing(true);
+      setActionError(null);
       const res = await api.market.buyItem(clubId, itemId);
       setResources((prev) => ({ ...prev, pp: res.newBalance }));
       await loadShop();
     } catch (error: unknown) {
-      alert(`❌ ${error instanceof Error ? error.message : "Error al comprar"}`);
+      setActionError(getApiErrorMessage(error, "No se pudo comprar el objeto."));
     } finally {
       setIsProcessing(false);
     }
   };
 
   if (isLoading) {
+    return <MarketRequestState title="Cargando tienda..." loadingLabel="Estamos sincronizando catalogo, inventario y recursos del club." accentClassName="text-cyan-500" />;
+  }
+
+  if (loadError) {
     return (
-      <div className="w-full min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
-        <Loader2 className="animate-spin mb-4 text-cyan-500" size={48} />
-        <h2 className="text-xl font-black uppercase tracking-widest">Cargando tienda...</h2>
-      </div>
+      <MarketRequestState
+        title="Cargando tienda..."
+        error={loadError}
+        onRetry={loadShop}
+      />
     );
   }
 
@@ -196,6 +208,15 @@ export default function ItemsShopPage({ params }: { params: Promise<{ clubId: st
       )}
 
       <div className="max-w-7xl mx-auto">
+        {actionError && (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-100">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-400" />
+            <div>
+              <p className="font-black uppercase tracking-wide text-red-300">Compra no completada</p>
+              <p className="mt-1 text-red-100/90">{actionError}</p>
+            </div>
+          </div>
+        )}
         {TYPE_ORDER.map((type) => {
           const typeItems = catalog.filter((item) => item.type === type);
           if (typeItems.length === 0) return null;

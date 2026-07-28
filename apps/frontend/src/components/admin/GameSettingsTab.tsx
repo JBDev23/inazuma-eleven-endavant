@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
-import { api } from "@/services/api";
+import { AlertTriangle, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
+import { api, getApiErrorMessage } from "@/services/api";
 import { computePachangaXpBounds, type GameSettings, type SessionXpConfig } from "@inazuma/shared";
 
 const emptySessionForm = (): SessionXpConfig => ({
@@ -12,6 +12,7 @@ const emptySessionForm = (): SessionXpConfig => ({
   pachangaMultiplier: 0.2,
   winnerRewardPp: 0,
   winnerRewardYens: 0,
+  coachXpPerYe: 100,
 });
 
 export default function GameSettingsTab() {
@@ -21,6 +22,8 @@ export default function GameSettingsTab() {
   const [sessionForm, setSessionForm] = useState<SessionXpConfig>(emptySessionForm);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -46,12 +49,14 @@ export default function GameSettingsTab() {
 
   const handleSaveGlobal = async () => {
     setSaving(true);
+    setActionError(null);
+    setActionSuccess(null);
     try {
       const data = await api.gameSettings.update({ currentSession });
       setSettings(data);
-      alert("Sesión activa guardada");
+      setActionSuccess("Sesión activa guardada");
     } catch (error) {
-      alert((error as Error).message || "Error al guardar");
+      setActionError(getApiErrorMessage(error, "Error al guardar."));
     } finally {
       setSaving(false);
     }
@@ -64,13 +69,15 @@ export default function GameSettingsTab() {
     }
 
     setSaving(true);
+    setActionError(null);
+    setActionSuccess(null);
     try {
       const data = await api.gameSettings.upsertSession(sessionForm);
       setSettings(data);
       setSessionForm(emptySessionForm());
-      alert(`Sesión ${sessionForm.session} guardada`);
+      setActionSuccess(`Sesión ${sessionForm.session} guardada`);
     } catch (error) {
-      alert((error as Error).message || "Error al guardar sesión");
+      setActionError(getApiErrorMessage(error, "Error al guardar la sesión."));
     } finally {
       setSaving(false);
     }
@@ -83,7 +90,7 @@ export default function GameSettingsTab() {
       const data = await api.gameSettings.deleteSession(session);
       setSettings(data);
     } catch (error) {
-      alert((error as Error).message || "Error al eliminar");
+      setActionError(getApiErrorMessage(error, "Error al eliminar."));
     }
   };
 
@@ -122,16 +129,38 @@ export default function GameSettingsTab() {
 
   return (
     <div className="flex flex-col gap-8 animate-in fade-in duration-300">
-      <div className="flex justify-end">
+      <div className="flex justify-stretch sm:justify-end">
         <button
           onClick={() => void loadData()}
-          className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-5 py-2.5 rounded-xl font-bold transition-colors border border-slate-700"
+          className="flex w-full sm:w-auto items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-5 py-2.5 rounded-xl font-bold transition-colors border border-slate-700"
         >
           <RefreshCw size={16} /> Recargar
         </button>
       </div>
 
-      <section className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
+      {(actionError || actionSuccess) && (
+        <div
+          className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
+            actionError
+              ? "border-red-500/30 bg-red-950/40 text-red-100"
+              : "border-emerald-500/30 bg-emerald-950/30 text-emerald-100"
+          }`}
+        >
+          {actionError ? (
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-400" />
+          ) : (
+            <span className="mt-0.5 shrink-0 text-emerald-400 font-black">✓</span>
+          )}
+          <div>
+            <p className="font-black uppercase tracking-wide">
+              {actionError ? "Accion no completada" : "Listo"}
+            </p>
+            <p className="mt-1">{actionError ?? actionSuccess}</p>
+          </div>
+        </div>
+      )}
+
+      <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 space-y-5">
         <div className="flex items-center gap-2">
           <TrendingUp className="text-violet-400" size={22} />
           <h2 className="text-lg font-black uppercase tracking-wider text-white">
@@ -155,13 +184,13 @@ export default function GameSettingsTab() {
         <button
           onClick={() => void handleSaveGlobal()}
           disabled={saving}
-          className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-sm transition-colors"
+          className="flex w-full sm:w-auto items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-sm transition-colors"
         >
           <Save size={16} /> Guardar sesión activa
         </button>
       </section>
 
-      <section className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
+      <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 space-y-5">
         <h2 className="text-lg font-black uppercase tracking-wider text-white">
           Configuración por sesión
         </h2>
@@ -170,7 +199,7 @@ export default function GameSettingsTab() {
           (ej. ×0,5 sobre 600 → 300 XP mínimo).
         </p>
 
-        <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-4">
           <label className="space-y-2">
             <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Sesión</span>
             <input
@@ -258,6 +287,20 @@ export default function GameSettingsTab() {
               className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500"
             />
           </label>
+          <label className="space-y-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-500">
+              XP por YE
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={sessionForm.coachXpPerYe}
+              onChange={(e) =>
+                setSessionForm((f) => ({ ...f, coachXpPerYe: Number(e.target.value) }))
+              }
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500"
+            />
+          </label>
         </div>
 
         <p className="text-xs text-emerald-400/90 font-bold">
@@ -268,27 +311,28 @@ export default function GameSettingsTab() {
         <button
           onClick={() => void handleUpsertSession()}
           disabled={saving}
-          className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-bold transition-colors border border-slate-700"
+          className="flex w-full sm:w-auto items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-bold transition-colors border border-slate-700"
         >
           <Plus size={16} /> Guardar sesión
         </button>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-800">
-          <table className="w-full text-left text-sm min-w-[720px]">
+        <div className="overflow-x-auto rounded-xl border border-slate-800 -mx-4 sm:mx-0 px-4 sm:px-0">
+          <table className="w-full text-left text-sm min-w-[640px]">
             <thead className="bg-slate-950 text-slate-500 uppercase text-xs tracking-widest">
               <tr>
-                <th className="p-4">Sesión</th>
-                <th className="p-4">Oficial min–máx</th>
-                <th className="p-4">Mult. pachanga</th>
-                <th className="p-4">Pachanga min–máx</th>
-                <th className="p-4">PP / YE ganador</th>
-                <th className="p-4 text-right">Acciones</th>
+                <th className="p-3 sm:p-4">Sesión</th>
+                <th className="p-3 sm:p-4">Oficial min–máx</th>
+                <th className="hidden md:table-cell p-3 sm:p-4">Mult. pachanga</th>
+                <th className="hidden lg:table-cell p-3 sm:p-4">Pachanga min–máx</th>
+                <th className="hidden sm:table-cell p-3 sm:p-4">PP / YE ganador</th>
+                <th className="hidden lg:table-cell p-3 sm:p-4">XP por YE</th>
+                <th className="p-3 sm:p-4 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {(settings?.sessionConfigs ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-600">
+                  <td colSpan={7} className="p-8 text-center text-slate-600">
                     No hay sesiones configuradas. Añade la sesión 1 (ej: 600 / 3500, mult. 0,2).
                   </td>
                 </tr>
@@ -304,27 +348,34 @@ export default function GameSettingsTab() {
                           : ""
                       }`}
                     >
-                      <td className="p-4 font-black text-white">
+                      <td className="p-3 sm:p-4 font-black text-white">
                         Sesión {config.session}
                         {config.session === settings?.currentSession && (
                           <span className="ml-2 text-[10px] text-violet-400 uppercase">
                             Activa
                           </span>
                         )}
+                        <div className="mt-1 space-y-0.5 md:hidden text-xs font-normal text-slate-400">
+                          <p>Pachanga ×{config.pachangaMultiplier}</p>
+                          <p className="sm:hidden">{config.winnerRewardPp} PP · {config.winnerRewardYens} YE</p>
+                        </div>
                       </td>
-                      <td className="p-4 tabular-nums">
+                      <td className="p-3 sm:p-4 tabular-nums">
                         {config.minXp} – {config.maxXp}
                       </td>
-                      <td className="p-4 tabular-nums text-cyan-400">
+                      <td className="hidden md:table-cell p-3 sm:p-4 tabular-nums text-cyan-400">
                         ×{config.pachangaMultiplier}
                       </td>
-                      <td className="p-4 tabular-nums text-emerald-400">
+                      <td className="hidden lg:table-cell p-3 sm:p-4 tabular-nums text-emerald-400">
                         {pachanga.minXp} – {pachanga.maxXp}
                       </td>
-                      <td className="p-4 tabular-nums text-amber-400">
+                      <td className="hidden sm:table-cell p-3 sm:p-4 tabular-nums text-amber-400">
                         {config.winnerRewardPp} PP · {config.winnerRewardYens} YE
                       </td>
-                      <td className="p-4 text-right space-x-2">
+                      <td className="hidden lg:table-cell p-3 sm:p-4 tabular-nums text-purple-300">
+                        {config.coachXpPerYe}
+                      </td>
+                      <td className="p-3 sm:p-4 text-right space-x-2 whitespace-nowrap">
                         <button
                           onClick={() => handleEditSession(config)}
                           className="text-blue-400 hover:text-blue-300 font-bold text-xs uppercase"

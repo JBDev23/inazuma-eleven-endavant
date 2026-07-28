@@ -13,7 +13,9 @@ import {
   CONSUMABLE_CATEGORY_LABELS,
   getPlayerMatchModifiers,
   isOfficialMatch,
+  normalizePlayerMoves,
   type ConsumableCategory,
+  type PlayerMoveWithProgress,
   type PlayerWithDetails,
 } from "@inazuma/shared";
 import {
@@ -21,6 +23,7 @@ import {
   Swords,
   Zap,
   ShieldHalf,
+  Shield,
   Target,
   Sparkles,
   Heart,
@@ -30,11 +33,20 @@ import {
   ArrowRightLeft,
   Droplets,
   UtensilsCrossed,
+  Star,
+  Lock,
+  Activity,
+  Hand,
+  Leaf,
+  Wind,
+  Mountain,
+  CircleDashed,
 } from "lucide-react";
 import { MatchFormat } from "./MatchFormatSelector";
 import { useMatchStore } from "@/store/useMatchStore";
 import { getAvailableConsumablesForPlayer, formatConsumableEffectForMatch } from "@/lib/match-consumables";
 import { getTeamFacilities } from "@/lib/match-facility";
+import { getMoveTpCost } from "@/lib/duel-actions";
 import { PlayerMatchModifiersBadge } from "@/components/PlayerMatchModifiersBadge";
 
 interface PlayerStatsModalProps {
@@ -58,6 +70,152 @@ const STAT_ROWS = [
   { key: "stamina" as const, label: "Resistencia", icon: Flame, color: "text-orange-400" },
   { key: "guts" as const, label: "Valor", icon: Brain, color: "text-violet-400" },
 ];
+
+const MOVE_TYPE_LABELS: Record<string, string> = {
+  SHOOT: "Tiro",
+  DRIBBLE: "Regate",
+  BLOCK: "Defensa",
+  CATCH: "Parada",
+  SKILL: "Habilidad",
+};
+
+function getMoveElementStyle(element: string, isUnlocked: boolean) {
+  if (!isUnlocked) {
+    return "border-slate-700/50 bg-slate-900/60 text-slate-500 opacity-75";
+  }
+
+  switch (element?.toLowerCase()) {
+    case "fuego":
+    case "fire":
+      return "border-red-500/30 bg-red-950/30 text-red-300";
+    case "bosque":
+    case "wood":
+      return "border-emerald-500/30 bg-emerald-950/30 text-emerald-300";
+    case "aire":
+    case "wind":
+      return "border-sky-500/30 bg-sky-950/30 text-sky-300";
+    case "montaña":
+    case "earth":
+      return "border-amber-500/30 bg-amber-950/30 text-amber-300";
+    default:
+      return "border-slate-600/40 bg-slate-900/60 text-slate-300";
+  }
+}
+
+function MoveElementIcon({ element, size = 14 }: { element: string; size?: number }) {
+  switch (element?.toLowerCase()) {
+    case "fuego":
+    case "fire":
+      return <Flame size={size} />;
+    case "bosque":
+    case "wood":
+      return <Leaf size={size} />;
+    case "aire":
+    case "wind":
+      return <Wind size={size} />;
+    case "montaña":
+    case "earth":
+      return <Mountain size={size} />;
+    default:
+      return <CircleDashed size={size} />;
+  }
+}
+
+function MoveTypeIcon({ type, size = 11 }: { type: string; size?: number }) {
+  switch (type?.toUpperCase()) {
+    case "SHOOT":
+      return <Target size={size} />;
+    case "DRIBBLE":
+      return <Activity size={size} />;
+    case "BLOCK":
+      return <Shield size={size} />;
+    case "CATCH":
+      return <Hand size={size} />;
+    case "SKILL":
+      return <Sparkles size={size} />;
+    default:
+      return <Shield size={size} />;
+  }
+}
+
+function getEvolutionBadge(path: string, level: number) {
+  if (level <= 1 || path === "NONE") return null;
+
+  if (path === "SHIN") {
+    if (level === 2) return { text: "Kai", style: "text-emerald-300 bg-emerald-950/50 border-emerald-500/30" };
+    if (level >= 3) return { text: "Shin", style: "text-fuchsia-300 bg-fuchsia-950/50 border-fuchsia-500/30" };
+  }
+
+  if (path === "L_G") {
+    if (level >= 5) return { text: `G${level}`, style: "text-amber-300 bg-amber-950/50 border-amber-500/30" };
+    return { text: `G${level}`, style: "text-sky-300 bg-sky-950/50 border-sky-500/30" };
+  }
+
+  return { text: `Nv.${level}`, style: "text-slate-300 bg-slate-800/80 border-slate-600/30" };
+}
+
+function SuperMoveCard({ move, playerElement }: { move: PlayerMoveWithProgress; playerElement?: string }) {
+  const isUnlocked = move.isUnlocked;
+  const style = getMoveElementStyle(move.element, isUnlocked);
+  const tpCost = getMoveTpCost(move);
+  const evolution = isUnlocked ? getEvolutionBadge(move.evolutionPath, move.currentLevel) : null;
+  const hasStab =
+    isUnlocked &&
+    !!playerElement &&
+    playerElement.toLowerCase() === move.element?.toLowerCase();
+
+  return (
+    <div className={`rounded-xl border p-2.5 ${style}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <MoveElementIcon element={move.element} />
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-wide truncate">
+              {isUnlocked ? move.name : "?????????"}
+            </p>
+            {isUnlocked && (
+              <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                {evolution && (
+                  <span className={`px-1.5 py-0.5 rounded border text-[8px] font-black uppercase tracking-widest ${evolution.style}`}>
+                    {evolution.text}
+                  </span>
+                )}
+                {hasStab && (
+                  <span className="px-1.5 py-0.5 rounded border text-[8px] font-black uppercase tracking-widest text-cyan-300 bg-cyan-950/50 border-cyan-500/30">
+                    STAB
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {!isUnlocked ? (
+          <span className="shrink-0 flex items-center gap-1 bg-black/40 px-1.5 py-0.5 rounded text-[9px] font-bold border border-white/10">
+            <Lock size={9} /> Nv. {move.unlockLevel}
+          </span>
+        ) : null}
+      </div>
+
+      {isUnlocked && (
+        <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 text-[10px] font-bold opacity-80">
+              <MoveTypeIcon type={move.type} />
+              {move.basePower}
+            </div>
+            <span className="text-[9px] font-black uppercase tracking-widest opacity-60 bg-black/20 px-1.5 py-0.5 rounded">
+              {MOVE_TYPE_LABELS[move.type] ?? move.type}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 text-[10px] font-black bg-black/25 px-2 py-0.5 rounded-md">
+            {tpCost} <Zap size={10} className="text-amber-400" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ResourceBar({
   label,
@@ -133,6 +291,7 @@ export function PlayerStatsModal({
   const coach = getActiveCoach(team);
   const baseStats = getDisplayStats(player);
   const maxStats = getEffectiveStats(player, coach);
+  const playerMoves = normalizePlayerMoves(player);
 
   const availableConsumables = canUseConsumables && team
     ? getAvailableConsumablesForPlayer(
@@ -326,6 +485,25 @@ export function PlayerStatsModal({
               </div>
             );
             })}
+          </div>
+
+          <div className="w-full mt-4 bg-black/30 p-3 rounded-2xl border border-white/5 backdrop-blur-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-violet-300 mb-2 flex items-center gap-1.5">
+              <Star className="w-3.5 h-3.5" />
+              Supertécnicas
+            </p>
+
+            {playerMoves.length === 0 ? (
+              <p className="text-[11px] font-bold text-slate-500 uppercase text-center py-2">
+                Sin supertécnicas registradas
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {playerMoves.map((move) => (
+                  <SuperMoveCard key={move.id} move={move} playerElement={player.element} />
+                ))}
+              </div>
+            )}
           </div>
 
           {canUseConsumables && (

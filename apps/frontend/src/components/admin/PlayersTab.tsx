@@ -1,20 +1,22 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { RefreshCw, UserMinus, ChevronRight, ChevronLeft, Edit2, Users } from "lucide-react";
-import { api } from "@/services/api";
+import { AlertTriangle, RefreshCw, UserMinus, ChevronRight, ChevronLeft, Edit2, Users } from "lucide-react";
+import { api, getApiErrorMessage } from "@/services/api";
 import type { Player, Team, UserClub } from "@inazuma/shared";
 
 import AdminPlayerFilters, { PlayerFilterState, INITIAL_FILTERS } from "@/components/admin/AdminPlayerFilters";
 import AdminPlayerModal from "@/components/admin/AdminPlayerModal";
 import AdminBulkPlayerModal, { BulkPlayerUpdatePayload } from "@/components/admin/AdminBulkPlayerModal";
 import PlayerModal from "@/components/player/PlayerModal";
+import { MarketRequestState } from "@/components/market/MarketRequestState";
 
 const ITEMS_PER_PAGE = 50;
 
 export default function PlayersTab() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [bulkEditing, setBulkEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -23,6 +25,7 @@ export default function PlayersTab() {
   const [currentPage, setCurrentPage] = useState(1);
   const [viewingPlayer, setViewingPlayer] = useState<Player | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const handleSavePlayer = async (playerId: number, updatedData: Partial<Player>) => {
     try {
@@ -31,6 +34,7 @@ export default function PlayersTab() {
       loadData();
     } catch (error) {
       console.error("Error al guardar los cambios:", error);
+      setActionError(getApiErrorMessage(error, "Error al guardar los cambios del jugador."));
     }
   };
 
@@ -42,6 +46,7 @@ export default function PlayersTab() {
       loadData();
     } catch (error) {
       console.error("Error al guardar cambios masivos:", error);
+      setActionError(getApiErrorMessage(error, "Error al guardar cambios masivos."));
     }
   };
 
@@ -57,11 +62,12 @@ export default function PlayersTab() {
       loadData();
     } catch (error) {
       console.error("Error al liberar al jugador:", error);
+      setActionError(getApiErrorMessage(error, "Error al liberar al jugador."));
     }
   };
 
   const handleBulkRelease = async () => {
-    const selectedPlayers = players.filter((p) => selectedIds.has(p.id));
+    const selectedPlayers = (players ?? []).filter((p) => selectedIds.has(p.id));
     const withOwner = selectedPlayers.filter((p) => p.ownerId);
 
     if (withOwner.length === 0) {
@@ -89,6 +95,8 @@ export default function PlayersTab() {
 
   const loadData = async () => {
     setIsLoading(true);
+    setLoadError(null);
+    setActionError(null);
     try {
       const [playersData, clubsData, teamsData] = await Promise.all([
         api.players.getAllPlayers(),
@@ -96,11 +104,12 @@ export default function PlayersTab() {
         api.teams.list()
       ]);
       
-      setPlayers(playersData);
-      setClubs(clubsData);
-      setTeams(teamsData);
+      setPlayers(playersData ?? []);
+      setClubs(clubsData ?? []);
+      setTeams(teamsData ?? []);
     } catch (error) {
       console.error("Error cargando datos:", error);
+      setLoadError(error);
     } finally {
       setIsLoading(false);
     }
@@ -111,11 +120,11 @@ export default function PlayersTab() {
   }, []);
 
   const availableSeasons = useMemo(() => {
-    return [...new Set(players.map((p) => p.season ?? 1))].sort((a, b) => a - b);
+    return [...new Set((players ?? []).map((p) => p.season ?? 1))].sort((a, b) => a - b);
   }, [players]);
 
   const filteredPlayers = useMemo(() => {
-    return players.filter((p) => {
+    return (players ?? []).filter((p) => {
       if (filters.search) {
         const lowerSearch = filters.search.toLowerCase();
         if (!p.name.toLowerCase().includes(lowerSearch) && !p.nickname?.toLowerCase().includes(lowerSearch)) return false;
@@ -155,7 +164,7 @@ export default function PlayersTab() {
   }, [filteredPlayers, currentPage]);
 
   const selectedPlayers = useMemo(
-    () => players.filter((p) => selectedIds.has(p.id)),
+    () => (players ?? []).filter((p) => selectedIds.has(p.id)),
     [players, selectedIds],
   );
 
@@ -195,14 +204,24 @@ export default function PlayersTab() {
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-300">
       
-      <div className="flex justify-end">
+      <div className="flex justify-stretch sm:justify-end">
         <button 
           onClick={loadData}
-          className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg font-bold transition-colors border border-slate-700"
+          className="flex w-full sm:w-auto items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-lg font-bold transition-colors border border-slate-700"
         >
           <RefreshCw size={16} /> Recargar Jugadores
         </button>
       </div>
+
+      {actionError && (
+        <div className="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-100">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-400" />
+          <div>
+            <p className="font-black uppercase tracking-wide text-red-300">Accion no completada</p>
+            <p className="mt-1 text-red-100/90">{actionError}</p>
+          </div>
+        </div>
+      )}
 
       <AdminPlayerFilters 
         filters={filters}
@@ -262,16 +281,27 @@ export default function PlayersTab() {
         </div>
       )}
 
-      <div className="bg-slate-900 border border-t-0 border-slate-800 rounded-b-2xl overflow-hidden overflow-x-auto shadow-xl">
+      <div className="bg-slate-900 border border-t-0 border-slate-800 rounded-b-2xl overflow-hidden shadow-xl">
+        <div className="overflow-x-auto -mx-px">
         {isLoading ? (
-          <div className="p-12 text-center text-red-500 font-black uppercase tracking-widest animate-pulse">
-            Accediendo a la base de datos...
-          </div>
+          <MarketRequestState
+            title="Accediendo a la base de datos..."
+            loadingLabel="Cargando jugadores, clubes y equipos del admin."
+            accentClassName="text-red-500"
+            className="w-full min-h-[320px] bg-transparent"
+          />
+        ) : loadError ? (
+          <MarketRequestState
+            title="No se pudo cargar la base de datos"
+            error={loadError}
+            onRetry={loadData}
+            className="w-full min-h-[320px] bg-transparent"
+          />
         ) : (
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[640px] lg:min-w-[900px] text-left border-collapse">
             <thead>
               <tr className="bg-slate-950 border-b border-slate-800">
-                <th className="p-4 w-10">
+                <th className="p-3 sm:p-4 w-10">
                   <input
                     type="checkbox"
                     checked={allPageSelected}
@@ -283,14 +313,14 @@ export default function PlayersTab() {
                     title="Seleccionar página actual"
                   />
                 </th>
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest">Jugador</th>
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Nivel</th>
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest">Pos / Elem</th>
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Precio</th>
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Equipo</th>
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Temp.</th>
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Estado</th>
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Acciones</th>
+                <th className="p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest">Jugador</th>
+                <th className="hidden sm:table-cell p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Nivel</th>
+                <th className="hidden md:table-cell p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest">Pos / Elem</th>
+                <th className="hidden lg:table-cell p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Precio</th>
+                <th className="hidden md:table-cell p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Equipo</th>
+                <th className="hidden xl:table-cell p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Temp.</th>
+                <th className="hidden sm:table-cell p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Estado</th>
+                <th className="p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
@@ -301,7 +331,7 @@ export default function PlayersTab() {
                   key={player.id}
                   className={`hover:bg-slate-800/50 transition-colors group ${isSelected ? "bg-blue-950/20" : ""}`}
                 >          
-                  <td className="p-4">
+                  <td className="p-3 sm:p-4">
                     <input
                       type="checkbox"
                       checked={isSelected}
@@ -311,30 +341,47 @@ export default function PlayersTab() {
                     />
                   </td>
                   <td 
-                    className="p-4 flex items-center gap-3 cursor-pointer"
+                    className="p-3 sm:p-4 cursor-pointer"
                     onClick={() => setViewingPlayer(player)}
                   >
-                    <img 
-                      src={player.spriteUrl || "/sprites/default.webp"} 
-                      alt={player.name} 
-                      className="w-10 h-10 object-contain drop-shadow-md transition-transform group-hover:scale-110"
-                    />
-                    <div>
-                      <p className="font-black text-white group-hover:text-blue-400 transition-colors">
-                        {player.name}
-                      </p>
-                      <p className="text-[10px] text-slate-500 font-mono uppercase">
-                        {player.nickname}
-                      </p>
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-[140px]">
+                      <img 
+                        src={player.spriteUrl || "/sprites/default.webp"} 
+                        alt={player.name} 
+                        className="w-8 h-8 sm:w-10 sm:h-10 object-contain drop-shadow-md transition-transform group-hover:scale-110 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className="font-black text-white group-hover:text-blue-400 transition-colors truncate">
+                          {player.name}
+                        </p>
+                        <p className="text-[10px] text-slate-500 font-mono uppercase truncate">
+                          {player.nickname}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1 mt-1 sm:hidden">
+                          <span className="text-[10px] font-black text-emerald-400 bg-emerald-950/50 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                            Nv.{player.level ?? 1}
+                          </span>
+                          <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded border border-slate-700 text-slate-300 bg-slate-950">
+                            {player.position}
+                          </span>
+                          {player.ownerId ? (
+                            <span className="text-[10px] font-bold text-blue-400">Club</span>
+                          ) : player.isFreeAgent ? (
+                            <span className="text-[10px] font-bold text-yellow-400">Libre</span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-slate-500">Bloq.</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="hidden sm:table-cell p-3 sm:p-4 text-center">
                     <span className="inline-flex items-center justify-center bg-emerald-950/50 text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded-md text-xs font-black tabular-nums">
                       Nv. {player.level ?? 1}
                     </span>
                   </td>
-                  <td className="p-4">
-                    <div className="flex gap-2">
+                  <td className="hidden md:table-cell p-3 sm:p-4">
+                    <div className="flex flex-wrap gap-1.5">
                       <span className="text-[10px] font-black uppercase px-2 py-1 rounded border border-slate-700 text-slate-300 bg-slate-950">
                         {player.position}
                       </span>
@@ -345,18 +392,18 @@ export default function PlayersTab() {
                       )}
                     </div>
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="hidden lg:table-cell p-3 sm:p-4 text-center">
                     <span className="text-yellow-500 font-black tabular-nums">{player.price} 🪙</span>
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="hidden md:table-cell p-3 sm:p-4 text-center">
                     <span className="text-xs font-bold text-slate-500 bg-slate-950 px-2 py-1 rounded-md border border-slate-800">
                       {player.teamId ? teams.find(t => t.id === player.teamId)?.name : "Sin equipo"}
                     </span>
                   </td>
-                  <td className="p-4 text-center text-sm font-mono text-slate-300">
+                  <td className="hidden xl:table-cell p-3 sm:p-4 text-center text-sm font-mono text-slate-300">
                     {player.season ?? 1}
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="hidden sm:table-cell p-3 sm:p-4 text-center">
                     {player.ownerId ? (
                       <span className="text-xs font-bold text-blue-400 bg-blue-950/30 px-2 py-1 rounded-md border border-blue-900">
                         Club: {player.ownerId}
@@ -371,8 +418,8 @@ export default function PlayersTab() {
                       </span>
                     )}
                   </td>
-                  <td className="p-4 text-right">
-                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <td className="p-3 sm:p-4 text-right">
+                    <div className="flex justify-end gap-1.5 sm:gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -402,6 +449,7 @@ export default function PlayersTab() {
             </tbody>
           </table>
         )}
+        </div>
         
         {!isLoading && filteredPlayers.length === 0 && (
           <div className="p-12 text-center text-slate-500 font-bold">

@@ -10,6 +10,8 @@ export interface SessionXpConfig {
   pachangaMultiplier: number;
   winnerRewardPp: number;
   winnerRewardYens: number;
+  /** XP que gana un entrenador por cada YE canjeado */
+  coachXpPerYe: number;
 }
 
 export interface GameSettings {

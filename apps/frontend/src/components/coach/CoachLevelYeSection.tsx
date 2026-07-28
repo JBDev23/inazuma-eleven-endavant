@@ -8,7 +8,7 @@ import {
   MAX_COACH_LEVEL,
   YE_XP_PER_POINT,
 } from "@inazuma/shared";
-import { api } from "@/services/api";
+import { api, getApiErrorMessage } from "@/services/api";
 import { ResourceCostBadge } from "@/components/economy/ResourceCostBadge";
 
 interface CoachLevelYeSectionProps {
@@ -16,6 +16,7 @@ interface CoachLevelYeSectionProps {
   availableYe: number;
   clubId: string;
   enableYeRedeem?: boolean;
+  xpPerYe?: number;
   onRedeemComplete?: (updated: { level: number; experience: number }) => void;
 }
 
@@ -141,6 +142,7 @@ export function CoachLevelYeSection({
   availableYe,
   clubId,
   enableYeRedeem = false,
+  xpPerYe = YE_XP_PER_POINT,
   onRedeemComplete,
 }: CoachLevelYeSectionProps) {
   const isMaxLevel = coach.level >= MAX_COACH_LEVEL;
@@ -149,6 +151,7 @@ export function CoachLevelYeSection({
   const [yeCount, setYeCount] = useState(1);
   const [step, setStep] = useState<"idle" | "confirm">("idle");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -170,9 +173,9 @@ export function CoachLevelYeSection({
       Array.from({ length: yeCount }, () => ({ coachId: coach.id })),
       [coach],
       availableYe,
-      YE_XP_PER_POINT,
+      xpPerYe,
     );
-  }, [isOpen, canRedeem, yeCount, coach, availableYe]);
+  }, [isOpen, canRedeem, yeCount, coach, availableYe, xpPerYe]);
 
   const coachPreview = preview?.coaches[0];
   const hasBlockingWarning = preview?.warnings.some(
@@ -187,6 +190,7 @@ export function CoachLevelYeSection({
   const handleRedeem = async () => {
     try {
       setIsProcessing(true);
+      setActionError(null);
       const allocations = Array.from({ length: yeCount }, () => ({ coachId: coach.id }));
       await api.market.redeemYe(clubId, allocations);
       onRedeemComplete?.({
@@ -197,7 +201,7 @@ export function CoachLevelYeSection({
       setYeCount(1);
       setIsOpen(false);
     } catch (error: unknown) {
-      alert(`❌ ${error instanceof Error ? error.message : "Error al canjear YE"}`);
+      setActionError(getApiErrorMessage(error, "Error al canjear YE."));
     } finally {
       setIsProcessing(false);
     }
@@ -205,6 +209,15 @@ export function CoachLevelYeSection({
 
   return (
     <div className="mb-6 space-y-3">
+      {actionError && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-100">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-400" />
+          <div>
+            <p className="font-black uppercase tracking-wide text-red-300">Accion no completada</p>
+            <p className="mt-1">{actionError}</p>
+          </div>
+        </div>
+      )}
       <LevelBar
         level={coach.level}
         experience={coach.experience}
@@ -238,7 +251,7 @@ export function CoachLevelYeSection({
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-[10px] font-bold text-slate-500">
-                {YE_XP_PER_POINT} XP / YE
+                {xpPerYe} XP / YE
               </span>
               <button
                 type="button"

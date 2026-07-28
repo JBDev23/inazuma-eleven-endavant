@@ -17,6 +17,11 @@ export class FormationsController {
     return this.formationsService.findAll();
   }
 
+  @Get(':id/clubs')
+  getClubAssignments(@Param('id', ParseIntPipe) id: number) {
+    return this.formationsService.getClubAssignments(id);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.formationsService.findOne(id);

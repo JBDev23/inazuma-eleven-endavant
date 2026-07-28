@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, UserCircle2, Presentation } from "lucide-react";
+import { X, UserCircle2, Presentation, Loader2 } from "lucide-react";
 import type { ClubResources, Coach, Formation } from "@inazuma/shared";
-import { canAffordResource, getDisplayModifiers, STAT_KEYS } from "@inazuma/shared";
+import { canAffordResource, getDisplayModifiers, STAT_KEYS, YE_XP_PER_POINT } from "@inazuma/shared";
 import { ResourceCostBadge } from "@/components/economy/ResourceCostBadge";
 import { FormationPreviewCard } from "@/components/tactics/FormationPreviewCard";
 import { CoachLevelYeSection } from "@/components/coach/CoachLevelYeSection";
+import { api } from "@/services/api";
 
 type CoachWithFormations = Coach & { formations?: Formation[] };
 
@@ -62,11 +63,37 @@ export default function CoachMarketModal({
   const displayName = coach.nickname ? `${coach.nickname} (${coach.name})` : coach.name;
   const [liveLevel, setLiveLevel] = useState(coach.level);
   const [liveExperience, setLiveExperience] = useState(coach.experience);
+  const [xpPerYe, setXpPerYe] = useState(YE_XP_PER_POINT);
 
   useEffect(() => {
     setLiveLevel(coach.level);
     setLiveExperience(coach.experience);
   }, [coach.id, coach.level, coach.experience]);
+
+  useEffect(() => {
+    if (!isOwnedView || !clubId || !resources) return;
+
+    let cancelled = false;
+
+    void api.gameSettings
+      .get()
+      .then((settings) => {
+        if (cancelled) return;
+        const sessionConfig = settings.sessionConfigs.find(
+          (config) => config.session === settings.currentSession,
+        );
+        setXpPerYe(sessionConfig?.coachXpPerYe ?? YE_XP_PER_POINT);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setXpPerYe(YE_XP_PER_POINT);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clubId, isOwnedView, resources]);
 
   const liveCoach = useMemo(
     () => ({ ...coach, level: liveLevel, experience: liveExperience }),
@@ -163,6 +190,7 @@ export default function CoachMarketModal({
               availableYe={resources.yens}
               clubId={clubId}
               enableYeRedeem
+              xpPerYe={xpPerYe}
               onRedeemComplete={async (updated) => {
                 setLiveLevel(updated.level);
                 setLiveExperience(updated.experience);
@@ -240,7 +268,10 @@ export default function CoachMarketModal({
                   onClick={() => onSell?.(coach.id)}
                   className="w-full flex items-center justify-center gap-3 bg-slate-700 hover:bg-slate-600 text-white text-sm font-black uppercase p-4 rounded-xl transition-all hover:scale-[1.02] shadow-[0_0_15px_rgba(30,41,59,0.5)] disabled:opacity-50 disabled:cursor-wait"
                 >
-                  <span>{isLoading ? "Procesando..." : "Liberar por"}</span>
+                  <span className="inline-flex items-center gap-2">
+                    {isLoading && <Loader2 size={16} className="animate-spin" />}
+                    {isLoading ? "Procesando..." : "Liberar por"}
+                  </span>
                   <ResourceCostBadge
                     amount={sellPrice}
                     resource="pp"
@@ -265,7 +296,10 @@ export default function CoachMarketModal({
                   : "bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed"
                 }`}
             >
-              <span>{isLoading ? "Procesando..." : "Fichar entrenador"}</span>
+              <span className="inline-flex items-center gap-2">
+                {isLoading && <Loader2 size={16} className="animate-spin" />}
+                {isLoading ? "Procesando..." : "Fichar entrenador"}
+              </span>
               <ResourceCostBadge
                 amount={coach.price}
                 resource="pp"

@@ -3,9 +3,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Lock, ArrowRight } from 'lucide-react';
-import { api } from "@/services/api";
+import { Shield, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import { api, getApiErrorMessage } from "@/services/api";
 import { ClubShield } from '@/components/club/ClubShield';
+import { MarketRequestState } from "@/components/market/MarketRequestState";
 
 export default function MarketLogin() {
   const router = useRouter();
@@ -13,25 +14,63 @@ export default function MarketLogin() {
   const [selectedClub, setSelectedClub] = useState<any>(null);
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
+  const [isLoadingClubs, setIsLoadingClubs] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const loadClubs = async () => {
+    setIsLoadingClubs(true);
+    setLoadError(null);
+    try {
+      const data = await api.market.getUserClubs();
+      setClubs(data);
+    } catch (err) {
+      console.error(err);
+      setLoadError(err);
+    } finally {
+      setIsLoadingClubs(false);
+    }
+  };
 
   useEffect(() => {
-    // Pedimos solo los clubes básicos al backend
-    api.market.getUserClubs().then((data) => setClubs(data));
+    void loadClubs();
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setIsSubmitting(true);
 
-    const res = await api.market.login(selectedClub.id, pin);
+    try {
+      const res = await api.market.login(selectedClub.id, pin);
 
-    if (res && "error" in res) {
-      setError(res.error as string);
+      if (res && "error" in res && res.error) {
+        setError(res.error);
+        setPin("");
+      } else {
+        router.push(`/market/${selectedClub.id}`);
+      }
+    } catch (err) {
+      setError(getApiErrorMessage(err, "No se pudo iniciar sesion."));
       setPin("");
-    } else {
-      router.push(`/market/${selectedClub.id}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  if (isLoadingClubs) {
+    return <MarketRequestState title="Conectando..." loadingLabel="Estamos cargando los clubes disponibles para entrar al market." accentClassName="text-yellow-500" />;
+  }
+
+  if (loadError) {
+    return (
+      <MarketRequestState
+        title="Conectando..."
+        error={loadError}
+        onRetry={loadClubs}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -98,8 +137,15 @@ export default function MarketLogin() {
 
               {error && <p className="text-red-500 text-sm font-bold text-center">{error}</p>}
 
-              <button type="submit" disabled={!pin} className="w-full bg-yellow-500 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-black text-lg py-4 rounded-xl transition-all cursor-pointer">
-                ENTRAR A LA SEDE
+              <button type="submit" disabled={!pin || isSubmitting} className="w-full bg-yellow-500 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-black text-lg py-4 rounded-xl transition-all cursor-pointer">
+                {isSubmitting ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 size={18} className="animate-spin" />
+                    ENTRANDO...
+                  </span>
+                ) : (
+                  "ENTRAR A LA SEDE"
+                )}
               </button>
             </form>
           )}

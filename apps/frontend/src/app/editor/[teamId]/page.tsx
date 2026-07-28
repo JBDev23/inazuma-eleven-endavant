@@ -6,6 +6,8 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { api } from "@/services/api";
 
+export const dynamic = "force-dynamic";
+
 export default async function TeamEditorPage({ params }: { params: Promise<{ teamId: string }> }) {
   const { teamId } = await params;
   

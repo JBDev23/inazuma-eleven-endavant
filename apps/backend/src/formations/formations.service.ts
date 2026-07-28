@@ -44,6 +44,29 @@ export class FormationsService {
     return formation;
   }
 
+  async getClubAssignments(formationId: number) {
+    await this.findOne(formationId);
+
+    const [clubs, assignments] = await Promise.all([
+      this.prisma.userClub.findMany({
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.clubFormation.findMany({
+        where: { formationId },
+        select: { clubId: true },
+      }),
+    ]);
+
+    const assignedClubIds = new Set(assignments.map((entry) => entry.clubId));
+
+    return clubs.map((club) => ({
+      clubId: club.id,
+      clubName: club.name,
+      ownedByClub: assignedClubIds.has(club.id),
+    }));
+  }
+
   async update(id: number, updateFormationDto: UpdateFormationDto) {
     await this.findOne(id);
 

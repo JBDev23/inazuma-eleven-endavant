@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Package, X, ChevronDown, Plus } from "lucide-react";
+import { AlertTriangle, Package, X, ChevronDown, Plus } from "lucide-react";
 import type { ClubItemWithDetails, Item, ItemType, Player, StatKey } from "@inazuma/shared";
 import {
   getPrimaryItemTypeForPosition,
@@ -11,7 +11,7 @@ import {
   parseItemStats,
   STAT_KEYS,
 } from "@inazuma/shared";
-import { api } from "@/services/api";
+import { api, getApiErrorMessage } from "@/services/api";
 
 interface PlayerEquipmentSectionProps {
   player: Player;
@@ -206,15 +206,17 @@ export function PlayerEquipmentSection({
 }: PlayerEquipmentSectionProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [openSlot, setOpenSlot] = useState<"primary" | "secondary" | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const handleEquip = async (slot: "primary" | "secondary", itemId: number | null) => {
     try {
       setIsLoading(true);
+      setActionError(null);
       await api.market.equipItem(clubId, { playerId: player.id, slot, itemId });
       setOpenSlot(null);
       await onUpdated();
     } catch (error: unknown) {
-      alert(`❌ ${error instanceof Error ? error.message : "Error al equipar"}`);
+      setActionError(getApiErrorMessage(error, "Error al equipar."));
     } finally {
       setIsLoading(false);
     }
@@ -228,6 +230,16 @@ export function PlayerEquipmentSection({
       <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
         <Package size={16} className="text-cyan-500" /> Equipamiento
       </h4>
+
+      {actionError && (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-100">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-400" />
+          <div>
+            <p className="font-black uppercase tracking-wide text-red-300">Accion no completada</p>
+            <p className="mt-1">{actionError}</p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <EquipmentSlot

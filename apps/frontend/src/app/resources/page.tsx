@@ -7,10 +7,12 @@ import { pickClubResources, type UserClub } from "@inazuma/shared";
 import { api } from "@/services/api";
 import { ClubResourcesDisplay } from "@/components/economy/ClubResourcesDisplay";
 import { ClubShield } from "@/components/club/ClubShield";
+import { MarketRequestState } from "@/components/market/MarketRequestState";
 
 export default function ResourcesPage() {
   const [clubs, setClubs] = useState<UserClub[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [refreshEverySeconds, setRefreshEverySeconds] = useState(5);
   const resourcesFingerprintRef = useRef("");
 
@@ -27,6 +29,7 @@ export default function ResourcesPage() {
   const loadClubs = useCallback(async (showLoader = false) => {
     if (showLoader) {
       setIsLoading(true);
+      setLoadError(null);
     }
     try {
       const clubsData = await api.market.getUserClubs();
@@ -37,6 +40,9 @@ export default function ResourcesPage() {
       }
     } catch (error) {
       console.error("Error cargando recursos de clubes:", error);
+      if (showLoader) {
+        setLoadError(error);
+      }
     } finally {
       if (showLoader) {
         setIsLoading(false);
@@ -97,9 +103,19 @@ export default function ResourcesPage() {
 
         <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-6 shadow-xl">
           {isLoading ? (
-            <div className="p-16 text-center text-yellow-500 font-black text-lg uppercase tracking-widest animate-pulse">
-              Cargando recursos...
-            </div>
+            <MarketRequestState
+              title="Cargando recursos..."
+              loadingLabel="Sincronizando recursos de tus clubes."
+              accentClassName="text-yellow-500"
+              className="w-full min-h-[260px] bg-transparent"
+            />
+          ) : loadError ? (
+            <MarketRequestState
+              title="No se pudieron cargar los recursos"
+              error={loadError}
+              onRetry={() => loadClubs(true)}
+              className="w-full min-h-[260px] bg-transparent"
+            />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
               {sortedClubs.map((club) => (

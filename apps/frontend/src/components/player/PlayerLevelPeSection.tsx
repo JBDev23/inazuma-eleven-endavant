@@ -8,7 +8,7 @@ import {
   MAX_PLAYER_LEVEL,
   PE_XP_PER_POINT,
 } from "@inazuma/shared";
-import { api } from "@/services/api";
+import { api, getApiErrorMessage } from "@/services/api";
 import { ResourceCostBadge } from "@/components/economy/ResourceCostBadge";
 
 interface PlayerLevelPeSectionProps {
@@ -149,6 +149,7 @@ export function PlayerLevelPeSection({
   const [peCount, setPeCount] = useState(1);
   const [step, setStep] = useState<"idle" | "confirm">("idle");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -187,6 +188,7 @@ export function PlayerLevelPeSection({
   const handleRedeem = async () => {
     try {
       setIsProcessing(true);
+      setActionError(null);
       const allocations = Array.from({ length: peCount }, () => ({ playerId: player.id }));
       await api.market.redeemPe(clubId, allocations);
       onRedeemComplete?.({
@@ -197,7 +199,7 @@ export function PlayerLevelPeSection({
       setPeCount(1);
       setIsOpen(false);
     } catch (error: unknown) {
-      alert(`❌ ${error instanceof Error ? error.message : "Error al canjear PE"}`);
+      setActionError(getApiErrorMessage(error, "Error al canjear PE."));
     } finally {
       setIsProcessing(false);
     }
@@ -205,6 +207,15 @@ export function PlayerLevelPeSection({
 
   return (
     <div className="mb-6 space-y-3">
+      {actionError && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-100">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-400" />
+          <div>
+            <p className="font-black uppercase tracking-wide text-red-300">Accion no completada</p>
+            <p className="mt-1">{actionError}</p>
+          </div>
+        </div>
+      )}
       <LevelBar
         level={player.level}
         experience={player.experience}

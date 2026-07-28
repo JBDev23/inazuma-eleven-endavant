@@ -8,6 +8,7 @@ import {
   Coach,
   ClubFacilityRecord,
   ClubSportsCity,
+  Team,
   StartFacilityUpgradeResult,
   SetPitchElementResult,
   ApproveFacilityResult,
@@ -15,11 +16,13 @@ import {
   CreateFormationDto,
   EquipItemDto,
   Formation,
+  FormationClubAssignment,
   FormationWithClubStatus,
   Item,
   ClubItemWithDetails,
   Move,
   Player,
+  PlayerWithDetails,
   UpdateFormationDto,
   AddTransactionDto,
   UpdateRosterDto,
@@ -36,6 +39,26 @@ import {
   SessionXpConfig,
 } from "@inazuma/shared";
 
+export type ApiErrorCode = "OFFLINE" | "TIMEOUT" | "NETWORK_ERROR" | "HTTP_ERROR" | "UNKNOWN";
+
+export class ApiError extends Error {
+  code: ApiErrorCode;
+  status?: number;
+  userMessage: string;
+
+  constructor(
+    code: ApiErrorCode,
+    message: string,
+    options?: { status?: number; userMessage?: string },
+  ) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+    this.status = options?.status;
+    this.userMessage = options?.userMessage ?? message;
+  }
+}
+
 const getApiBase = (): string => {
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
@@ -46,196 +69,273 @@ const getApiBase = (): string => {
   return 'http://localhost:4000';
 };
 
+const DEFAULT_LOAD_TIMEOUT_MS = 20_000;
+const DEFAULT_ACTION_TIMEOUT_MS = 30_000;
+
+type RequestJsonOptions = RequestInit & {
+  timeoutMs?: number;
+  fallbackMessage: string;
+};
+
+const isOffline = () =>
+  typeof navigator !== "undefined" &&
+  "onLine" in navigator &&
+  navigator.onLine === false;
+
+const getFriendlyNetworkMessage = (fallbackMessage: string) => {
+  if (isOffline()) {
+    return "Parece que no tienes internet. Revisa la conexion e intentalo de nuevo.";
+  }
+
+  return `${fallbackMessage} Revisa tu conexion e intentalo de nuevo.`;
+};
+
+const parseJsonSafe = async (res: Response) => {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+
+  return res.json().catch(() => null);
+};
+
+const toApiError = (
+  error: unknown,
+  fallbackMessage: string,
+  timeoutMs: number,
+): ApiError => {
+  if (error instanceof ApiError) {
+    return error;
+  }
+
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return new ApiError(
+      "TIMEOUT",
+      `${fallbackMessage} La peticion ha superado el tiempo de espera.`,
+      {
+        userMessage: `La peticion ha tardado demasiado (>${Math.ceil(timeoutMs / 1000)}s). Intentalo otra vez.`,
+      },
+    );
+  }
+
+  if (error instanceof TypeError) {
+    const code: ApiErrorCode = isOffline() ? "OFFLINE" : "NETWORK_ERROR";
+    return new ApiError(code, error.message, {
+      userMessage: getFriendlyNetworkMessage(fallbackMessage),
+    });
+  }
+
+  if (error instanceof Error) {
+    return new ApiError("UNKNOWN", error.message, {
+      userMessage: fallbackMessage,
+    });
+  }
+
+  return new ApiError("UNKNOWN", fallbackMessage, { userMessage: fallbackMessage });
+};
+
+export const getApiErrorMessage = (error: unknown, fallbackMessage: string) =>
+  error instanceof ApiError ? error.userMessage : fallbackMessage;
+
+async function requestJson<T>(
+  path: string,
+  { timeoutMs = DEFAULT_LOAD_TIMEOUT_MS, fallbackMessage, ...init }: RequestJsonOptions,
+): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(`${getApiBase()}${path}`, {
+      ...init,
+      signal: controller.signal,
+    });
+    const data = await parseJsonSafe(res);
+
+    if (!res.ok) {
+      const message =
+        (data && typeof data === "object" && "message" in data && typeof data.message === "string"
+          ? data.message
+          : null) ?? `${fallbackMessage} (${res.status})`;
+
+      throw new ApiError("HTTP_ERROR", message, {
+        status: res.status,
+        userMessage: message,
+      });
+    }
+
+    return data as T;
+  } catch (error) {
+    throw toApiError(error, fallbackMessage, timeoutMs);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export const api = {
   players: {
     async updatePlayer(playerId: number, updatedData: Partial<Player>) {
-      const res = await fetch(`${getApiBase()}/players/${playerId}`, {
+      return requestJson<Player>(`/players/${playerId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedData),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al actualizar jugador",
       });
-      if (!res.ok) throw new Error("Error al actualizar jugador");
-      return res.json();
     },
     async getByTeam(teamId: string) {
-      const res = await fetch(`${getApiBase()}/teams/players/${teamId}`, {
+      return requestJson<(PlayerWithDetails & { team: { name: string } })[]>(`/teams/players/${teamId}`, {
         cache: "no-store",
+        timeoutMs: DEFAULT_LOAD_TIMEOUT_MS,
+        fallbackMessage: "Error al cargar jugadores del equipo",
       });
-
-      if (!res.ok) throw new Error("Error al cargar jugadores del equipo");
-      return res.json();
     },
     async getAllPlayers() {
-      const res = await fetch(`${getApiBase()}/players`, {
+      return requestJson<Player[]>(`/players`, {
         cache: "no-store",
+        timeoutMs: DEFAULT_LOAD_TIMEOUT_MS,
+        fallbackMessage: "Error al cargar jugadores",
       });
-      return res.json();
     },
     async bulkUpdatePlayers(playerIds: number[], updatedData: Partial<Player>) {
-      const res = await fetch(`${getApiBase()}/players/bulk`, {
+      return requestJson<unknown>(`/players/bulk`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ playerIds, ...updatedData }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al actualizar jugadores",
       });
-      if (!res.ok) throw new Error("Error al actualizar jugadores");
-      return res.json();
     },
     async bulkReleasePlayers(playerIds: number[]) {
-      const res = await fetch(`${getApiBase()}/players/bulk-release`, {
+      return requestJson<{ released: number; skipped: number }>(`/players/bulk-release`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ playerIds }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al liberar jugadores",
       });
-      if (!res.ok) throw new Error("Error al liberar jugadores");
-      return res.json();
     },
     async releasePlayer(playerId: number) {
-      const res = await fetch(`${getApiBase()}/players/release`, {
+      return requestJson<unknown>(`/players/release`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ playerId }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al liberar jugador",
       });
-      if (!res.ok) throw new Error("Error al liberar jugador");
-      return res.json();
     },
   },
 
   teams: {
     async list() {
-      const res = await fetch(`${getApiBase()}/teams`, {
+      return requestJson<Team[]>(`/teams`, {
         cache: "no-store",
+        timeoutMs: DEFAULT_LOAD_TIMEOUT_MS,
+        fallbackMessage: "Error al cargar equipos",
       });
-
-      if (!res.ok) throw new Error("Error al cargar equipos");
-      return res.json();
     },
 
     async get(teamId: string) {
-      const res = await fetch(`${getApiBase()}/teams/${teamId}`, {
+      return requestJson<Team>(`/teams/${teamId}`, {
         cache: "no-store",
+        timeoutMs: DEFAULT_LOAD_TIMEOUT_MS,
+        fallbackMessage: "Error al cargar equipo",
       });
-
-      if (!res.ok) throw new Error("Error al cargar equipo");
-      return res.json();
     },
 
     async saveMap(teamId: string, mapData: unknown) {
-      const res = await fetch(`${getApiBase()}/teams/${teamId}/map`, {
+      return requestJson<unknown>(`/teams/${teamId}/map`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(mapData),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al guardar el mapa del equipo",
       });
-
-      if (!res.ok) {
-        const errorDetails = await res.json().catch(() => null);
-        console.error("❌ NestJS rechazó el guardado. Motivo:", errorDetails);
-        throw new Error(`Error al guardar: ${errorDetails?.message || res.statusText}`);
-      }
-      return res.json();
     },
   },
 
   market: {
     async login(clubId: string, pin: string) {
-      const res = await fetch(`${getApiBase()}/market/login`, {
+      return requestJson<{ error?: string; clubId?: string }>("/market/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ clubId, pin }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo iniciar sesion.",
       });
-
-      if (!res.ok) throw new Error("Error al iniciar sesión");
-      return res.json();
     },
 
     async getUserClubs() {
-      const res = await fetch(`${getApiBase()}/market/user-clubs`, {
+      return requestJson<UserClub[]>("/market/user-clubs", {
         cache: "no-store",
+        fallbackMessage: "No se pudieron cargar los clubes del mercado.",
       });
-      return res.json();
     },
 
     async getUserClub(clubId: string) {
-      const res = await fetch(`${getApiBase()}/market/club/${clubId}`, {
+      return requestJson<UserClub>(`/market/club/${clubId}`, {
         cache: "no-store",
+        fallbackMessage: "No se pudo cargar la sede del club.",
       });
-      return res.json();
     },
     async getTeamMapForUser(clubId: string, teamSlug: string, sourceTeamSlug?: string) {
       const query = sourceTeamSlug ? `?sourceTeamSlug=${sourceTeamSlug}` : "";
-      const res = await fetch(`${getApiBase()}/market/${clubId}/map/${teamSlug}${query}`, {
+      return requestJson<{ nodes: unknown[]; edges: unknown[] }>(`/market/${clubId}/map/${teamSlug}${query}`, {
         cache: "no-store",
+        fallbackMessage: "No se pudo cargar el mapa del equipo.",
       });
-      if (!res.ok) throw new Error("Error al cargar el mapa");
-      return res.json();
     },
 
     async performAction(clubId: string, action: "buy" | "toll" | "sell", nickname: string) {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/action`, {
+      return requestJson<{ newBalance: number }>(`/market/${clubId}/action`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, nickname }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo completar la transaccion.",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Error al procesar la transacción");
-      }
-      return data;
     },
     async debugTogglePlayer(clubId: string, nickname: string, action: 'buy' | 'sell' | 'make-rival-toll') {
-      const res = await fetch(`${getApiBase()}/market/debug/toggle-player`, {
+      return requestJson<unknown>("/market/debug/toggle-player", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clubId, nickname, action }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo completar la accion de depuracion.",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Error en acción de debug");
-      }
-      return data;
     },
     async getFreeAgents() {
-      const res = await fetch(`${getApiBase()}/market/free-agents`, {
+      return requestJson<Player[]>("/market/free-agents", {
         cache: "no-store",
+        fallbackMessage: "No se pudieron cargar los agentes libres.",
       });
-
-      if (!res.ok) throw new Error("Error al cargar agentes libres");
-      return res.json();
     },
     async getFreeCoaches() {
-      const res = await fetch(`${getApiBase()}/market/free-coaches`, {
+      return requestJson<Coach[]>("/market/free-coaches", {
         cache: "no-store",
+        fallbackMessage: "No se pudieron cargar los entrenadores libres.",
       });
-
-      if (!res.ok) throw new Error("Error al cargar entrenadores libres");
-      return res.json();
     },
     async buyCoach(clubId: string, coachId: number) {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/coaches/buy`, {
+      return requestJson<{ newBalance: number }>(`/market/${clubId}/coaches/buy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ coachId }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo fichar al entrenador.",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Error al fichar entrenador");
-      }
-      return data;
     },
     async sellCoach(clubId: string, coachId: number) {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/coaches/sell`, {
+      return requestJson<{ newBalance: number }>(`/market/${clubId}/coaches/sell`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ coachId }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo liberar al entrenador.",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Error al vender entrenador");
-      }
-      return data;
     },
     async updateUserClub(clubId: string, updatedData: Partial<UserClub>) {
       const res = await fetch(`${getApiBase()}/market/user-clubs/${clubId}`, {
@@ -272,112 +372,112 @@ export const api = {
     },
 
     async getFormationCatalog(): Promise<Formation[]> {
-      const res = await fetch(`${getApiBase()}/market/formations`, {
+      return requestJson<Formation[]>("/market/formations", {
         cache: "no-store",
+        fallbackMessage: "No se pudo cargar el catalogo de formaciones.",
       });
-      if (!res.ok) throw new Error("Error al cargar el catálogo de formaciones");
-      return res.json();
     },
 
     async getClubFormations(clubId: string): Promise<FormationWithClubStatus[]> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/formations`, {
+      return requestJson<FormationWithClubStatus[]>(`/market/${clubId}/formations`, {
         cache: "no-store",
+        fallbackMessage: "No se pudieron cargar las formaciones del club.",
       });
-      if (!res.ok) throw new Error("Error al cargar las formaciones del club");
-      return res.json();
     },
 
     async buyFormation(clubId: string, formationId: number): Promise<BuyFormationResult> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/formations/buy`, {
+      return requestJson<BuyFormationResult>(`/market/${clubId}/formations/buy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ formationId }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo comprar la formacion.",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Error al comprar la formación");
-      }
-      return data;
     },
 
     async activateFormation(
       clubId: string,
       formationId: number,
     ): Promise<ActivateFormationResult> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/formations/active`, {
+      return requestJson<ActivateFormationResult>(`/market/${clubId}/formations/active`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ formationId }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo activar la formacion.",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Error al activar la formación");
-      }
-      return data;
+    },
+
+    async adminGrantFormation(clubId: string, formationId: number) {
+      return requestJson<{ success: true }>(`/market/user-clubs/${clubId}/formations/grant`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ formationId }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo asignar la formacion al club.",
+      });
+    },
+
+    async adminRevokeFormation(clubId: string, formationId: number) {
+      return requestJson<{ success: true }>(`/market/user-clubs/${clubId}/formations/revoke`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ formationId }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo quitar la formacion del club.",
+      });
     },
 
     async previewPeRedemption(
       clubId: string,
       allocations: RedeemPeDto["allocations"],
     ): Promise<PeRedemptionPreview> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/pe/preview`, {
+      return requestJson<PeRedemptionPreview>(`/market/${clubId}/pe/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ allocations }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo generar la vista previa de PE.",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Error al generar la vista previa");
-      }
-      return data;
     },
 
     async redeemPe(
       clubId: string,
       allocations: RedeemPeDto["allocations"],
     ): Promise<RedeemPeResult> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/pe/redeem`, {
+      return requestJson<RedeemPeResult>(`/market/${clubId}/pe/redeem`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ allocations }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo canjear PE.",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Error al canjear PE");
-      }
-      return data;
     },
 
     async previewYeRedemption(
       clubId: string,
       allocations: RedeemYeDto["allocations"],
     ): Promise<YeRedemptionPreview> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/ye/preview`, {
+      return requestJson<YeRedemptionPreview>(`/market/${clubId}/ye/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ allocations }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo generar la vista previa de YE.",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Error al generar la vista previa");
-      }
-      return data;
     },
 
     async redeemYe(
       clubId: string,
       allocations: RedeemYeDto["allocations"],
     ): Promise<RedeemYeResult> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/ye/redeem`, {
+      return requestJson<RedeemYeResult>(`/market/${clubId}/ye/redeem`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ allocations }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo canjear YE.",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Error al canjear YE");
-      }
-      return data;
     },
 
     async spendPc(
@@ -385,39 +485,37 @@ export const api = {
       playerId: number,
       statKey: import("@inazuma/shared").StatKey,
     ): Promise<import("@inazuma/shared").SpendPcResult> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/pc/spend`, {
+      return requestJson<import("@inazuma/shared").SpendPcResult>(`/market/${clubId}/pc/spend`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ playerId, statKey }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudieron gastar los PC.",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Error al gastar PC");
-      }
-      return data;
     },
 
     async getItemCatalog(): Promise<Item[]> {
-      const res = await fetch(`${getApiBase()}/market/items`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Error al cargar el catálogo de objetos");
-      return res.json();
+      return requestJson<Item[]>("/market/items", {
+        cache: "no-store",
+        fallbackMessage: "No se pudo cargar el catalogo de objetos.",
+      });
     },
 
     async getClubItems(clubId: string): Promise<ClubItemWithDetails[]> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/items`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Error al cargar el inventario del club");
-      return res.json();
+      return requestJson<ClubItemWithDetails[]>(`/market/${clubId}/items`, {
+        cache: "no-store",
+        fallbackMessage: "No se pudo cargar el inventario de objetos.",
+      });
     },
 
     async buyItem(clubId: string, itemId: number): Promise<BuyItemResult> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/items/buy`, {
+      return requestJson<BuyItemResult>(`/market/${clubId}/items/buy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo comprar el objeto.",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Error al comprar el objeto");
-      return data;
     },
 
     async equipItem(clubId: string, dto: EquipItemDto) {
@@ -432,63 +530,64 @@ export const api = {
     },
 
     async getConsumableCatalog(): Promise<Consumable[]> {
-      const res = await fetch(`${getApiBase()}/market/consumables`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Error al cargar el catálogo de consumibles");
-      return res.json();
+      return requestJson<Consumable[]>("/market/consumables", {
+        cache: "no-store",
+        fallbackMessage: "No se pudo cargar el catalogo de consumibles.",
+      });
     },
 
     async getClubConsumables(clubId: string): Promise<ClubConsumableWithDetails[]> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/consumables`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Error al cargar el inventario de consumibles");
-      return res.json();
+      return requestJson<ClubConsumableWithDetails[]>(`/market/${clubId}/consumables`, {
+        cache: "no-store",
+        fallbackMessage: "No se pudo cargar el inventario de consumibles.",
+      });
     },
 
     async buyConsumable(clubId: string, consumableId: number): Promise<BuyConsumableResult> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/consumables/buy`, {
+      return requestJson<BuyConsumableResult>(`/market/${clubId}/consumables/buy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ consumableId }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo comprar el consumible.",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Error al comprar el consumible");
-      return data;
     },
 
     async getSportsCity(clubId: string): Promise<ClubSportsCity> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/sports-city`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Error al cargar la ciudad deportiva");
-      return res.json();
+      return requestJson<ClubSportsCity>(`/market/${clubId}/sports-city`, {
+        cache: "no-store",
+        fallbackMessage: "No se pudo cargar la ciudad deportiva.",
+      });
     },
 
     async getAllSportsCities(): Promise<Array<ClubSportsCity & { clubName: string }>> {
-      const res = await fetch(`${getApiBase()}/market/sports-cities`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Error al cargar ciudades deportivas");
-      return res.json();
+      return requestJson<Array<ClubSportsCity & { clubName: string }>>("/market/sports-cities", {
+        cache: "no-store",
+        fallbackMessage: "No se pudieron cargar las ciudades deportivas.",
+      });
     },
 
     async startFacilityUpgrade(clubId: string, facilityId: FacilityId): Promise<StartFacilityUpgradeResult> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/sports-city/upgrade`, {
+      return requestJson<StartFacilityUpgradeResult>(`/market/${clubId}/sports-city/upgrade`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ facilityId }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo iniciar la obra.",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Error al iniciar la obra");
-      return data;
     },
 
     async setPitchElement(
       clubId: string,
       pitchElement: string,
     ): Promise<SetPitchElementResult> {
-      const res = await fetch(`${getApiBase()}/market/${clubId}/sports-city/pitch-element`, {
+      return requestJson<SetPitchElementResult>(`/market/${clubId}/sports-city/pitch-element`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pitchElement }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo guardar el terreno elemental.",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Error al guardar el terreno elemental");
-      return data;
     },
 
     async adminUpdateFacility(
@@ -496,217 +595,211 @@ export const api = {
       facilityId: FacilityId,
       options: { level?: number; approveConstruction?: boolean },
     ): Promise<ApproveFacilityResult> {
-      const res = await fetch(`${getApiBase()}/market/sports-city/${clubId}`, {
+      return requestJson<ApproveFacilityResult>(`/market/sports-city/${clubId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ facilityId, ...options }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al actualizar instalación",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Error al actualizar instalación");
-      return data;
     },
   },
 
   nfc: {
     async syncBracelet(bracelet: BraceletData): Promise<NfcSyncResult> {
-      const res = await fetch(`${getApiBase()}/nfc/sync`, {
+      return requestJson<NfcSyncResult>("/nfc/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bracelet),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al sincronizar la pulsera",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Error al sincronizar la pulsera");
-      }
-      return data;
     },
   },
 
   moves: {
     async create(move: Move) {
-      const res = await fetch(`${getApiBase()}/moves`, {
+      await requestJson<unknown>("/moves", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(move),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al crear la técnica",
       });
     },
     async update(moveId: number, updatedData: Partial<Move>) {
-      const res = await fetch(`${getApiBase()}/moves/${moveId}`, {
+      await requestJson<unknown>(`/moves/${moveId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedData),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al actualizar la técnica",
       });
     },
     async getAll() { 
-      const res = await fetch(`${getApiBase()}/moves`, {
+      return requestJson<Move[]>("/moves", {
         cache: "no-store",
+        timeoutMs: DEFAULT_LOAD_TIMEOUT_MS,
+        fallbackMessage: "Error al cargar las técnicas",
       });
-      return res.json();
     },
     async getOne(moveId: number) {
-      const res = await fetch(`${getApiBase()}/moves/${moveId}`, {
+      return requestJson<Move>(`/moves/${moveId}`, {
         cache: "no-store",
+        timeoutMs: DEFAULT_LOAD_TIMEOUT_MS,
+        fallbackMessage: "Error al cargar la técnica",
       });
-      return res.json();
     },
     async delete(moveId: number) {
-      const res = await fetch(`${getApiBase()}/moves/${moveId}`, {
+      return requestJson<unknown>(`/moves/${moveId}`, {
         method: "DELETE",
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al eliminar la técnica",
       });
-      return res.json();
     },
   },
 
   coaches: {
     async create(coach: Partial<Coach>) {
-      const res = await fetch(`${getApiBase()}/coaches`, {
+      return requestJson<Coach>("/coaches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(coach),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al crear el entrenador",
       });
-      if (!res.ok) throw new Error("Error al crear el entrenador");
-      return res.json();
     },
     async update(coachId: number, updatedData: Partial<Coach>) {
-      const res = await fetch(`${getApiBase()}/coaches/${coachId}`, {
+      return requestJson<Coach>(`/coaches/${coachId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedData),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al actualizar el entrenador",
       });
-      if (!res.ok) throw new Error("Error al actualizar el entrenador");
-      return res.json();
     },
     async getAll(): Promise<Coach[]> {
-      const res = await fetch(`${getApiBase()}/coaches`, {
+      return requestJson<Coach[]>("/coaches", {
         cache: "no-store",
+        timeoutMs: DEFAULT_LOAD_TIMEOUT_MS,
+        fallbackMessage: "Error al cargar entrenadores",
       });
-      if (!res.ok) throw new Error("Error al cargar entrenadores");
-      return res.json();
     },
     async getOne(coachId: number): Promise<Coach> {
-      const res = await fetch(`${getApiBase()}/coaches/${coachId}`, {
+      return requestJson<Coach>(`/coaches/${coachId}`, {
         cache: "no-store",
+        timeoutMs: DEFAULT_LOAD_TIMEOUT_MS,
+        fallbackMessage: "Error al cargar el entrenador",
       });
-      if (!res.ok) throw new Error("Error al cargar el entrenador");
-      return res.json();
     },
     async delete(coachId: number) {
-      const res = await fetch(`${getApiBase()}/coaches/${coachId}`, {
+      return requestJson<unknown>(`/coaches/${coachId}`, {
         method: "DELETE",
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al eliminar el entrenador",
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message || "Error al eliminar el entrenador");
-      return data;
     },
     async release(coachId: number) {
-      const res = await fetch(`${getApiBase()}/coaches/release`, {
+      return requestJson<unknown>("/coaches/release", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ coachId }),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al liberar el entrenador",
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message || "Error al liberar el entrenador");
-      return data;
     },
   },
 
   formations: {
     async create(formation: CreateFormationDto): Promise<Formation> {
-      const res = await fetch(`${getApiBase()}/formations`, {
+      return requestJson<Formation>("/formations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formation),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al crear la formación",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Error al crear la formación");
-      return data;
     },
 
     async update(formationId: number, updatedData: UpdateFormationDto): Promise<Formation> {
-      const res = await fetch(`${getApiBase()}/formations/${formationId}`, {
+      return requestJson<Formation>(`/formations/${formationId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedData),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al actualizar la formación",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Error al actualizar la formación");
-      return data;
     },
 
     async getAll(): Promise<Formation[]> {
-      const res = await fetch(`${getApiBase()}/formations`, {
+      return requestJson<Formation[]>("/formations", {
         cache: "no-store",
+        timeoutMs: DEFAULT_LOAD_TIMEOUT_MS,
+        fallbackMessage: "Error al cargar formaciones",
       });
-      if (!res.ok) throw new Error("Error al cargar formaciones");
-      return res.json();
     },
 
     async getOne(formationId: number): Promise<Formation> {
-      const res = await fetch(`${getApiBase()}/formations/${formationId}`, {
+      return requestJson<Formation>(`/formations/${formationId}`, {
         cache: "no-store",
+        timeoutMs: DEFAULT_LOAD_TIMEOUT_MS,
+        fallbackMessage: "Error al cargar la formación",
       });
-      if (!res.ok) throw new Error("Error al cargar la formación");
-      return res.json();
     },
 
     async delete(formationId: number): Promise<Formation> {
-      const res = await fetch(`${getApiBase()}/formations/${formationId}`, {
+      return requestJson<Formation>(`/formations/${formationId}`, {
         method: "DELETE",
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al eliminar la formación",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Error al eliminar la formación");
-      return data;
+    },
+
+    async getClubAssignments(formationId: number): Promise<FormationClubAssignment[]> {
+      return requestJson<FormationClubAssignment[]>(`/formations/${formationId}/clubs`, {
+        cache: "no-store",
+        timeoutMs: DEFAULT_LOAD_TIMEOUT_MS,
+        fallbackMessage: "Error al cargar los clubes de la formación",
+      });
     },
   },
 
   gameSettings: {
     async get(): Promise<GameSettings> {
-      const res = await fetch(`${getApiBase()}/game-settings`, { cache: "no-store" });
-      if (!res.ok) {
-        let message = `Error al cargar configuración de XP (${res.status})`;
-        try {
-          const json = await res.json();
-          if (json.message) message = json.message;
-        } catch {
-          if (res.status === 404) {
-            message =
-              "El endpoint /game-settings no existe. Reinicia el backend para cargar el módulo de XP.";
-          }
-        }
-        throw new Error(message);
-      }
-      return res.json();
+      return requestJson<GameSettings>("/game-settings", {
+        cache: "no-store",
+        timeoutMs: DEFAULT_LOAD_TIMEOUT_MS,
+        fallbackMessage:
+          "Error al cargar configuración de XP. Reinicia el backend si el modulo no existe.",
+      });
     },
 
     async update(data: { currentSession?: number }): Promise<GameSettings> {
-      const res = await fetch(`${getApiBase()}/game-settings`, {
+      return requestJson<GameSettings>("/game-settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al guardar configuración",
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || "Error al guardar configuración");
-      return json;
     },
 
     async upsertSession(config: SessionXpConfig): Promise<GameSettings> {
-      const res = await fetch(`${getApiBase()}/game-settings/sessions`, {
+      return requestJson<GameSettings>("/game-settings/sessions", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al guardar sesión",
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || "Error al guardar sesión");
-      return json;
     },
 
     async deleteSession(session: number): Promise<GameSettings> {
-      const res = await fetch(`${getApiBase()}/game-settings/sessions/${session}`, {
+      return requestJson<GameSettings>(`/game-settings/sessions/${session}`, {
         method: "DELETE",
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al eliminar sesión",
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || "Error al eliminar sesión");
-      return json;
     },
   },
 };

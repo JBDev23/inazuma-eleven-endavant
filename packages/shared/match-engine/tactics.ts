@@ -6,6 +6,7 @@ export type TacticFamily =
   | 'block'
   | 'steal'
   | 'shoot'
+  | 'lob'
   | 'catch'
   | 'punch'
   | 'other';
@@ -18,7 +19,7 @@ const ACTION_TACTIC_FAMILY: Partial<Record<ActionCategory, TacticFamily>> = {
   BLOCK_SUPER: 'block',
   STEAL_NORMAL: 'steal',
   SHOOT_NORMAL: 'shoot',
-  LOB_SHOT: 'shoot',
+  LOB_SHOT: 'lob',
   VOLLEY: 'shoot',
   SHOOT_SUPER: 'shoot',
   CATCH_NORMAL: 'catch',
@@ -33,16 +34,24 @@ const FIELD_RPS: Record<TacticFamily, TacticFamily> = {
   steal: 'dribble',
   dribble: 'feint',
   shoot: 'other',
+  lob: 'other',
   catch: 'other',
   punch: 'other',
   other: 'other',
 };
 
-/** Ciclo de portería: tiro > puño > atrapada > tiro */
+/**
+ * Ciclo de portería: tiro > atrape > vaselina > despeje > tiro
+ * - Tiro Normal rompe el agarre (gana a Atrape)
+ * - Despeje rechaza la fuerza bruta (gana a Tiro Normal)
+ * - Vaselina engaña al portero agresivo (gana a Despeje)
+ * - Atrape embolsa el balón bombeado (gana a Vaselina)
+ */
 const GOAL_RPS: Record<TacticFamily, TacticFamily> = {
-  shoot: 'punch',
-  punch: 'catch',
-  catch: 'shoot',
+  shoot: 'catch',
+  catch: 'lob',
+  lob: 'punch',
+  punch: 'shoot',
   feint: 'other',
   dribble: 'other',
   block: 'other',

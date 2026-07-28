@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { Search, RefreshCw, Edit2, Plus, Zap, FilterX } from "lucide-react";
-import { api } from "@/services/api"; 
+import { AlertTriangle, Search, RefreshCw, Edit2, Plus, Zap, FilterX } from "lucide-react";
+import { api, getApiErrorMessage } from "@/services/api"; 
 import type { Move } from "@inazuma/shared"; 
 import AdminMoveModal from "./AdminMoveModal";
+import { MarketRequestState } from "@/components/market/MarketRequestState";
 
 // 🎯 1. Definimos el estado de los filtros
 interface MoveFilterState {
@@ -24,6 +25,8 @@ const INITIAL_FILTERS: MoveFilterState = {
 export default function MovesTab() {
   const [moves, setMoves] = useState<Move[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   
   // 🎯 2. Centralizamos los filtros en un solo estado
   const [filters, setFilters] = useState<MoveFilterState>(INITIAL_FILTERS);
@@ -31,11 +34,14 @@ export default function MovesTab() {
 
   const loadData = async () => {
     setIsLoading(true);
+    setLoadError(null);
+    setActionError(null);
     try {
       const data = await api.moves.getAll();
       setMoves(data);
     } catch (error) {
       console.error("Error cargando técnicas:", error);
+      setLoadError(error);
     } finally {
       setIsLoading(false);
     }
@@ -83,7 +89,7 @@ export default function MovesTab() {
       setEditingMove(null);
       loadData();
     } catch (error) {
-      alert((error as Error).message || "Error al guardar la técnica");
+      setActionError(getApiErrorMessage(error, "Error al guardar la técnica."));
     }
   };
 
@@ -91,11 +97,10 @@ export default function MovesTab() {
     <div className="flex flex-col gap-6 animate-in fade-in duration-300">
       
       {/* 🎯 4. PANEL DE FILTROS AVANZADOS */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 flex flex-col gap-3 sm:gap-4 shadow-xl">
         
-        {/* Fila 1: Buscador y Botones principales */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
+        <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
+          <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
             <input
               type="text"
@@ -106,23 +111,24 @@ export default function MovesTab() {
             />
           </div>
 
-          <div className="shrink-0 bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl flex items-center justify-center">
-            <span className="text-sm font-black text-slate-400">
-              {filteredMoves.length} RESULTADOS
-            </span>
+          <div className="flex flex-wrap items-stretch gap-2 sm:gap-3">
+            <div className="flex-1 sm:flex-none bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl flex items-center justify-center min-w-[120px]">
+              <span className="text-xs sm:text-sm font-black text-slate-400 whitespace-nowrap">
+                {filteredMoves.length} RESULTADOS
+              </span>
+            </div>
+
+            <button onClick={loadData} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-3 rounded-xl transition-colors font-bold border border-slate-700" aria-label="Recargar">
+              <RefreshCw size={18} />
+            </button>
+
+            <button onClick={() => setEditingMove({})} className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-4 sm:px-6 py-3 rounded-xl font-black uppercase tracking-widest text-sm shadow-[0_0_15px_rgba(147,51,234,0.3)] transition-colors border border-purple-500/50">
+              <Plus size={18} /> Nueva
+            </button>
           </div>
-
-          <button onClick={loadData} className="shrink-0 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-3 rounded-xl transition-colors font-bold border border-slate-700">
-            <RefreshCw size={18} />
-          </button>
-
-          <button onClick={() => setEditingMove({})} className="shrink-0 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest shadow-[0_0_15px_rgba(147,51,234,0.3)] transition-colors border border-purple-500/50">
-            <Plus size={18} /> Nueva
-          </button>
         </div>
 
-        {/* Fila 2: Dropdowns de Filtrado */}
-        <div className="flex flex-col md:flex-row gap-3 flex-wrap">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <select 
             value={filters.type} 
             onChange={(e) => handleChangeFilter("type", e.target.value)} 
@@ -172,47 +178,63 @@ export default function MovesTab() {
         </div>
       </div>
 
-      {/* TABLA DE SUPERTÉCNICAS */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden overflow-x-auto shadow-xl">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+        <div className="overflow-x-auto">
         {isLoading ? (
-          <div className="p-12 text-center text-purple-500 font-black uppercase animate-pulse">Cargando base de datos...</div>
+          <MarketRequestState
+            title="Cargando base de datos..."
+            loadingLabel="Sincronizando técnicas."
+            accentClassName="text-purple-500"
+            className="w-full min-h-[260px] bg-transparent"
+          />
+        ) : loadError ? (
+          <MarketRequestState
+            title="No se pudo cargar la base de datos"
+            error={loadError}
+            onRetry={loadData}
+            className="w-full min-h-[260px] bg-transparent"
+          />
         ) : (
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[560px] lg:min-w-[760px] text-left border-collapse">
             <thead>
               <tr className="bg-slate-950 border-b border-slate-800">
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest">Técnica</th>
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Clase</th>
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Poder (Base - Máx)</th>
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Costo TP</th>
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Evolución</th>
-                <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Acciones</th>
+                <th className="p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest">Técnica</th>
+                <th className="hidden sm:table-cell p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Clase</th>
+                <th className="hidden md:table-cell p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Poder (Base - Máx)</th>
+                <th className="hidden lg:table-cell p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Costo TP</th>
+                <th className="hidden md:table-cell p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Evolución</th>
+                <th className="p-3 sm:p-4 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
               {filteredMoves.map((m) => (
                 <tr key={m.id} className="hover:bg-slate-800/50 transition-colors group">
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center text-slate-500">
+                  <td className="p-3 sm:p-4">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-[140px]">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center text-slate-500 shrink-0">
                         <Zap size={20} />
                       </div>
-                      <div>
-                        <p className="font-black text-white">{m.name}</p>
-                        <p className="text-[10px] text-slate-500 font-mono">ID: {m.id}</p>
+                      <div className="min-w-0">
+                        <p className="font-black text-white truncate">{m.name}</p>
+                        <p className="text-[10px] text-slate-500 font-mono truncate">ID: {m.id}</p>
+                        <div className="flex flex-wrap gap-1 mt-1 sm:hidden">
+                          <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded border border-slate-700 bg-slate-950 text-slate-300">{m.type}</span>
+                          <span className="text-[10px] font-black text-purple-400">{m.basePower}→{m.maxPower}</span>
+                        </div>
                       </div>
                     </div>
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="hidden sm:table-cell p-3 sm:p-4 text-center">
                     <span className="text-[10px] font-black uppercase px-2 py-1 rounded border border-slate-700 bg-slate-950 text-slate-300 mr-2">{m.type}</span>
                     <span className={`text-[10px] font-black uppercase px-2 py-1 rounded border border-slate-700 bg-slate-950 ${m.element === 'Fuego' ? 'text-red-400' : m.element === 'Bosque' ? 'text-green-400' : m.element === 'Aire' ? 'text-blue-400' : m.element === 'Montaña' ? 'text-amber-600' : 'text-slate-400'}`}>{m.element}</span>
                   </td>
-                  <td className="p-4 text-center text-sm font-mono">
+                  <td className="hidden md:table-cell p-3 sm:p-4 text-center text-sm font-mono">
                     <span className="text-white">{m.basePower}</span> <span className="text-slate-600 mx-1">➔</span> <span className="text-purple-400 font-black">{m.maxPower}</span>
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="hidden lg:table-cell p-3 sm:p-4 text-center">
                     <span className="text-yellow-500 font-black tabular-nums bg-yellow-950/20 border border-yellow-900/30 px-2 py-1 rounded-md">{m.tpCost} ⚡</span>
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="hidden md:table-cell p-3 sm:p-4 text-center">
                     {m.evolutionPath !== "NONE" ? (
                       <span className="text-xs font-bold text-purple-400 bg-purple-950/30 px-2 py-1 rounded-md border border-purple-900">
                         {m.evolutionPath} <span className="text-slate-400 text-[10px]">({m.evolutionSpeed})</span>
@@ -221,8 +243,8 @@ export default function MovesTab() {
                       <span className="text-xs font-bold text-slate-600 italic">No evoluciona</span>
                     )}
                   </td>
-                  <td className="p-4 text-right">
-                    <button onClick={() => setEditingMove(m)} className="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-[0_0_10px_rgba(147,51,234,0.3)]">
+                  <td className="p-3 sm:p-4 text-right">
+                    <button onClick={() => setEditingMove(m)} className="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all shadow-[0_0_10px_rgba(147,51,234,0.3)]" aria-label={`Editar ${m.name}`}>
                       <Edit2 size={16} />
                     </button>
                   </td>
@@ -231,6 +253,7 @@ export default function MovesTab() {
             </tbody>
           </table>
         )}
+        </div>
         
         {!isLoading && filteredMoves.length === 0 && (
           <div className="p-12 text-center text-slate-500 font-bold uppercase tracking-widest">
@@ -238,6 +261,16 @@ export default function MovesTab() {
           </div>
         )}
       </div>
+
+      {actionError && (
+        <div className="mt-4 flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-100">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-400" />
+          <div>
+            <p className="font-black uppercase tracking-wide text-red-300">Accion no completada</p>
+            <p className="mt-1 text-red-100/90">{actionError}</p>
+          </div>
+        </div>
+      )}
 
       {editingMove && (
         <AdminMoveModal 

@@ -3,11 +3,11 @@
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { 
-  Users, Network, Store, Shield, Activity,
+  Users, Network, Store, Shield, Activity, AlertTriangle,
   TrendingUp, Flame, Wind, Mountain, Leaf, BarChart3,
   LayoutTemplate, UserCircle2, Package, Droplets, Building2
 } from 'lucide-react';
-import { api } from '@/services/api';
+import { api, getApiErrorMessage } from '@/services/api';
 import PlayerGrid from '@/components/player/PlayerGrid';
 import CoachGrid from '@/components/coach/CoachGrid';
 import CoachMarketModal from '@/components/coach/CoachMarketModal';
@@ -18,6 +18,7 @@ import { getDisplayStats, getEffectiveStats, getActiveCoach, getTotalStats, pick
 import PlayerModal from '@/components/player/PlayerModal';
 import { ClubResourcesDisplay } from '@/components/economy/ClubResourcesDisplay';
 import { ClubShield } from '@/components/club/ClubShield';
+import { MarketRequestState } from '@/components/market/MarketRequestState';
 
 type RosterTab = 'players' | 'coaches' | 'items' | 'consumables';
 
@@ -26,15 +27,25 @@ export default function ClubDashboardPage({ params }: { params: Promise<{ clubId
   
   const [club, setClub] = useState<UserClub | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [selectedCoach, setSelectedCoach] = useState<Coach | null>(null);
   const [activeTab, setActiveTab] = useState<RosterTab>('players');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   
   async function loadData() {
-    const res = await api.market.getUserClub(clubId);
-    setClub(res);
-    setLoading(false);
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await api.market.getUserClub(clubId);
+      setClub(res);
+    } catch (error) {
+      console.error(error);
+      setLoadError(error);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -42,21 +53,28 @@ export default function ClubDashboardPage({ params }: { params: Promise<{ clubId
   }, [clubId]);
 
   if (loading || !club) {
-    return (
-      <div className="h-screen bg-slate-950 flex items-center justify-center text-yellow-500 font-black text-2xl tracking-widest uppercase">
-        Cargando Sede...
-      </div>
-    );
+    if (loadError) {
+      return (
+        <MarketRequestState
+          title="Cargando sede..."
+          error={loadError}
+          onRetry={loadData}
+        />
+      );
+    }
+
+    return <MarketRequestState title="Cargando sede..." loadingLabel="Estamos sincronizando la plantilla, recursos e inventario del club." accentClassName="text-yellow-500" />;
   }
 
   const handleAction = async (action: 'buy' | 'toll' | 'sell', nickname: string) => {
     try {
       setIsProcessing(true);
+      setActionError(null);
       await api.market.performAction(clubId, action, nickname);
       setSelectedPlayer(null);
-      loadData();
+      await loadData();
     } catch (error: unknown) {
-      alert(`❌ ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      setActionError(getApiErrorMessage(error, 'No se pudo completar la accion del jugador.'));
     } finally {
       setIsProcessing(false);
     }
@@ -65,11 +83,12 @@ export default function ClubDashboardPage({ params }: { params: Promise<{ clubId
   const handleSellCoach = async (coachId: number) => {
     try {
       setIsProcessing(true);
+      setActionError(null);
       await api.market.sellCoach(clubId, coachId);
       setSelectedCoach(null);
-      loadData();
+      await loadData();
     } catch (error: unknown) {
-      alert(`❌ ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      setActionError(getApiErrorMessage(error, 'No se pudo liberar al entrenador.'));
     } finally {
       setIsProcessing(false);
     }
@@ -266,6 +285,15 @@ export default function ClubDashboardPage({ params }: { params: Promise<{ clubId
 
       {/* 🛡️ PLANTILLA FICHADA */}
       <div className="max-w-7xl mx-auto">
+        {actionError && (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-100">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-400" />
+            <div>
+              <p className="font-black uppercase tracking-wide text-red-300">Accion no completada</p>
+              <p className="mt-1 text-red-100/90">{actionError}</p>
+            </div>
+          </div>
+        )}
         <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter border-b-2 border-slate-800 pb-4 mb-6 flex items-center gap-3">
           <Activity className="text-blue-500" /> Fichajes
         </h3>

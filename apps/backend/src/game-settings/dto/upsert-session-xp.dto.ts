@@ -27,4 +27,8 @@ export class UpsertSessionXpDto {
   @IsInt()
   @Min(0)
   winnerRewardYens: number;
+
+  @IsInt()
+  @Min(0)
+  coachXpPerYe: number;
 }

@@ -422,6 +422,8 @@ model SessionXpConfig {
   /** Recompensa al club ganador */
   winnerRewardPp      Int   @default(0)
   winnerRewardYens    Int   @default(0)
+  /** XP que gana un entrenador por cada YE canjeado */
+  coachXpPerYe        Int   @default(100)
 }
 
 // ==========================================

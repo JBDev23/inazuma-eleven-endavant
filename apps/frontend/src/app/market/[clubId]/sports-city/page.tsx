@@ -2,14 +2,15 @@
 
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Building2, Loader2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Building2 } from "lucide-react";
 import { pickClubResources } from "@inazuma/shared";
 import type { ClubFacilityRecord, NormalizedElement, UserClub } from "@inazuma/shared";
-import { api } from "@/services/api";
+import { api, getApiErrorMessage } from "@/services/api";
 import { ClubResourcesDisplay } from "@/components/economy/ClubResourcesDisplay";
 import { ClubShield } from "@/components/club/ClubShield";
 import { SportsCityMap } from "@/components/sports-city/SportsCityMap";
 import type { FacilityId } from "@/components/sports-city/types";
+import { MarketRequestState } from "@/components/market/MarketRequestState";
 
 export default function SportsCityPage({ params }: { params: Promise<{ clubId: string }> }) {
   const { clubId } = use(params);
@@ -18,24 +19,34 @@ export default function SportsCityPage({ params }: { params: Promise<{ clubId: s
   const [isLoading, setIsLoading] = useState(true);
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [isSavingPitchElement, setIsSavingPitchElement] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
-    const [clubRes, cityRes] = await Promise.all([
-      api.market.getUserClub(clubId),
-      api.market.getSportsCity(clubId),
-    ]);
-    setClub(clubRes);
-    setFacilities(cityRes.facilities);
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const [clubRes, cityRes] = await Promise.all([
+        api.market.getUserClub(clubId),
+        api.market.getSportsCity(clubId),
+      ]);
+      setClub(clubRes);
+      setFacilities(cityRes.facilities);
+    } catch (error) {
+      console.error(error);
+      setLoadError(error);
+    } finally {
+      setIsLoading(false);
+    }
   }, [clubId]);
 
   useEffect(() => {
-    loadData()
-      .catch(console.error)
-      .finally(() => setIsLoading(false));
+    void loadData();
   }, [loadData]);
 
   const handleUpgrade = async (facilityId: FacilityId) => {
     setIsUpgrading(true);
+    setActionError(null);
     try {
       const result = await api.market.startFacilityUpgrade(clubId, facilityId);
       setFacilities((prev) =>
@@ -43,7 +54,7 @@ export default function SportsCityPage({ params }: { params: Promise<{ clubId: s
       );
       setClub((prev) => (prev ? { ...prev, pp: result.newBalance } : prev));
     } catch (error) {
-      alert((error as Error).message || "Error al iniciar la obra");
+      setActionError(getApiErrorMessage(error, "No se pudo iniciar la obra."));
     } finally {
       setIsUpgrading(false);
     }
@@ -51,24 +62,30 @@ export default function SportsCityPage({ params }: { params: Promise<{ clubId: s
 
   const handleSetPitchElement = async (pitchElement: NormalizedElement) => {
     setIsSavingPitchElement(true);
+    setActionError(null);
     try {
       const result = await api.market.setPitchElement(clubId, pitchElement);
       setFacilities((prev) =>
         prev.map((f) => (f.facilityId === "field" ? result.facility : f)),
       );
     } catch (error) {
-      alert((error as Error).message || "Error al guardar el terreno elemental");
+      setActionError(getApiErrorMessage(error, "No se pudo guardar el terreno elemental."));
     } finally {
       setIsSavingPitchElement(false);
     }
   };
 
   if (isLoading) {
+    return <MarketRequestState title="Cargando ciudad deportiva..." loadingLabel="Estamos sincronizando las instalaciones y recursos del club." accentClassName="text-emerald-500" />;
+  }
+
+  if (loadError) {
     return (
-      <div className="w-full min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
-        <Loader2 className="animate-spin mb-4 text-emerald-500" size={48} />
-        <h2 className="text-xl font-black uppercase tracking-widest">Cargando ciudad deportiva...</h2>
-      </div>
+      <MarketRequestState
+        title="Cargando ciudad deportiva..."
+        error={loadError}
+        onRetry={loadData}
+      />
     );
   }
 
@@ -115,6 +132,15 @@ export default function SportsCityPage({ params }: { params: Promise<{ clubId: s
       </div>
 
       <div className="max-w-7xl mx-auto">
+        {actionError && (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-100">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-400" />
+            <div>
+              <p className="font-black uppercase tracking-wide text-red-300">Accion no completada</p>
+              <p className="mt-1 text-red-100/90">{actionError}</p>
+            </div>
+          </div>
+        )}
         {club && (
           <SportsCityMap
             facilities={facilities}

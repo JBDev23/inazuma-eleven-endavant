@@ -129,6 +129,24 @@ export class MarketController {
     return this.marketService.activateFormation(clubId, body.formationId);
   }
 
+  @Post('user-clubs/:clubId/formations/grant')
+  @HttpCode(HttpStatus.OK)
+  async adminGrantFormation(
+    @Param('clubId') clubId: string,
+    @Body() body: BuyFormationDto,
+  ) {
+    return this.marketService.adminGrantFormation(clubId, body.formationId);
+  }
+
+  @Post('user-clubs/:clubId/formations/revoke')
+  @HttpCode(HttpStatus.OK)
+  async adminRevokeFormation(
+    @Param('clubId') clubId: string,
+    @Body() body: BuyFormationDto,
+  ) {
+    return this.marketService.adminRevokeFormation(clubId, body.formationId);
+  }
+
   @Post(':clubId/pe/preview')
   @HttpCode(HttpStatus.OK)
   async previewPeRedemption(

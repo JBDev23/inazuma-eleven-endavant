@@ -290,8 +290,15 @@ export type UpdateFormationDto = Partial<CreateFormationDto>;
 export interface FormationWithClubStatus extends Formation {
   unlocked: boolean;
   unlockedByCoach: boolean;
+  ownedByClub: boolean;
   isActive11: boolean;
   isActive4: boolean;
+}
+
+export interface FormationClubAssignment {
+  clubId: string;
+  clubName: string;
+  ownedByClub: boolean;
 }
 
 export interface BuyFormationResult {

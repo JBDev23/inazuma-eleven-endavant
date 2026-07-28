@@ -13,10 +13,11 @@ import {
   Edge
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Loader2 } from 'lucide-react';
-import { api } from '@/services/api';
+import { AlertTriangle, Loader2 } from 'lucide-react';
+import { api, getApiErrorMessage } from '@/services/api';
 import { type ClubResources } from '@inazuma/shared';
 import { ClubResourcesDisplay } from '@/components/economy/ClubResourcesDisplay';
+import { MarketRequestState } from '@/components/market/MarketRequestState';
 
 // 🎯 Nodos Visuales
 import ViewerPlayerNode from '@/components/viewer-nodes/ViewerPlayerNode';
@@ -46,6 +47,8 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
   
   const [loadedMaps, setLoadedMaps] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [inlineError, setInlineError] = useState<string | null>(null);
   const [selectedNodeData, setSelectedNodeData] = useState<any | null>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
   
@@ -54,11 +57,13 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
   // 🎯 1. FETCH INICIAL (Se ejecuta solo al cargar la página)
   useEffect(() => {
     async function loadInitialMap() {
+      setIsLoading(true);
+      setLoadError(null);
       try {
         const mapData = await api.market.getTeamMapForUser(clubId, baseTeamSlug);
         
-        setNodes(mapData.nodes);
-        setEdges(mapData.edges);
+        setNodes(mapData.nodes as Node[]);
+        setEdges(mapData.edges as Edge[]);
         setLoadedMaps([baseTeamSlug]);
         setIsLoading(false);
 
@@ -67,7 +72,7 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
 
       } catch (error) {
         console.error(error);
-        alert("Error de conexión con el mercado.");
+        setLoadError(error);
         setIsLoading(false);
       }
     }
@@ -103,6 +108,7 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
     // CASO B: Si está cerrado, pedimos los datos reales a la API
     try {
       setIsLoading(true);
+      setInlineError(null);
       
       // 1. Llamada a tu API real usando el slug del equipo destino
       const targetMap = await api.market.getTeamMapForUser(clubId, targetTeamSlug, currentTeamSlug);
@@ -110,7 +116,7 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
       // 2. Buscamos el nodo de entrada (EntryNode) en el nuevo mapa
       // Buscamos el nodo que se conecte con nuestro mapa actual. 
       // Por si acaso hubiera varias entradas en ese mapa, comprobamos el sourceMapId.
-      const entryNode = targetMap.nodes.find((n: any) => 
+      const entryNode = (targetMap.nodes as Node[]).find((n: any) => 
         n.type === 'entryNode' && n.data.sourceTeamSlug === currentTeamSlug
       );
 
@@ -164,7 +170,7 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
 
     } catch (error) {
       console.error(error);
-      alert("Error al cargar la siguiente zona");
+      setInlineError(getApiErrorMessage(error, "No se pudo cargar la siguiente zona."));
     } finally {
       setIsLoading(false);
     }
@@ -182,22 +188,23 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
 
   const refreshMap = useCallback(async () => {
     const mapRes = await api.market.getTeamMapForUser(clubId, baseTeamSlug);
-    setNodes(mapRes.nodes);
-    setEdges(mapRes.edges);
+    setNodes(mapRes.nodes as Node[]);
+    setEdges(mapRes.edges as Edge[]);
     setLoadedMaps([baseTeamSlug]);
   }, [clubId, baseTeamSlug, setNodes, setEdges]);
 
   const handleModalAction = useCallback(async (action: 'buy' | 'toll' | 'sell', nickname: string) => {
     try {
       setIsActionLoading(true);
+      setInlineError(null);
       const result = await api.market.performAction(clubId, action, nickname);
       setResources((prev) => ({ ...prev, pp: result.newBalance as number }));
       setSelectedNodeData(null);
       await refreshMap();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Error al procesar la transacción';
+      const message = getApiErrorMessage(error, 'No se pudo procesar la transaccion.');
       console.error(error);
-      alert(`❌ ${message}`);
+      setInlineError(message);
     } finally {
       setIsActionLoading(false);
     }
@@ -205,11 +212,17 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
 
   // Pantalla de carga mientras se pide el mapa base
   if (isLoading && loadedMaps.length === 0) {
+    return <MarketRequestState title="Conectando con la sede..." loadingLabel="Estamos cargando el mapa base del club." accentClassName="text-emerald-500" className="w-full h-screen bg-slate-950" />;
+  }
+
+  if (loadError && loadedMaps.length === 0) {
     return (
-      <div className="w-full h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
-        <Loader2 className="animate-spin mb-4" size={48} />
-        <h2 className="text-xl font-black uppercase tracking-widest">Conectando con la sede...</h2>
-      </div>
+      <MarketRequestState
+        title="Conectando con la sede..."
+        error={loadError}
+        onRetry={() => window.location.reload()}
+        className="w-full h-screen bg-slate-950"
+      />
     );
   }
 
@@ -249,6 +262,18 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
         title="Recursos"
         className="absolute top-4 right-4 z-10"
       />
+
+      {inlineError && (
+        <div className="absolute top-4 left-4 z-20 max-w-md rounded-xl border border-red-500/30 bg-red-950/85 px-4 py-3 text-sm text-red-100 shadow-xl backdrop-blur-sm">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-400" />
+            <div>
+              <p className="font-black uppercase tracking-wide text-red-300">Problema de conexion</p>
+              <p className="mt-1 text-red-100/90">{inlineError}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isLoading && loadedMaps.length > 0 && (
         <div className="absolute top-4 left-4 z-10 bg-slate-900/80 p-3 rounded-xl border border-slate-600 backdrop-blur-sm text-slate-300 flex items-center gap-2 font-black text-xs uppercase shadow-xl">

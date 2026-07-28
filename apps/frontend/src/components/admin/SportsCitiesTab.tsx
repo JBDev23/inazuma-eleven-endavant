@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Building2, CheckCircle2, Hammer, RefreshCw, Search } from "lucide-react";
-import { api } from "@/services/api";
+import { AlertTriangle, Building2, CheckCircle2, Hammer, RefreshCw, Search } from "lucide-react";
+import { api, getApiErrorMessage } from "@/services/api";
 import {
   FACILITY_LABELS,
   LEVEL_LABELS,
@@ -11,22 +11,28 @@ import {
   type FacilityId,
   type FacilityLevel,
 } from "@inazuma/shared";
+import { MarketRequestState } from "@/components/market/MarketRequestState";
 
 type SportsCityWithName = ClubSportsCity & { clubName: string };
 
 export default function SportsCitiesTab() {
   const [cities, setCities] = useState<SportsCityWithName[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const loadData = async () => {
     setIsLoading(true);
+    setLoadError(null);
+    setActionError(null);
     try {
       const data = await api.market.getAllSportsCities();
       setCities(data);
     } catch (error) {
       console.error(error);
+      setLoadError(error);
     } finally {
       setIsLoading(false);
     }
@@ -54,11 +60,12 @@ export default function SportsCitiesTab() {
   const handleLevelChange = async (clubId: string, facilityId: FacilityId, level: number) => {
     const key = `${clubId}-${facilityId}-level`;
     setActionLoading(key);
+    setActionError(null);
     try {
       await api.market.adminUpdateFacility(clubId, facilityId, { level });
       await loadData();
     } catch (error) {
-      alert((error as Error).message || "Error al actualizar nivel");
+      setActionError(getApiErrorMessage(error, "No se pudo actualizar el nivel."));
     } finally {
       setActionLoading(null);
     }
@@ -67,11 +74,12 @@ export default function SportsCitiesTab() {
   const handleApprove = async (clubId: string, facilityId: FacilityId) => {
     const key = `${clubId}-${facilityId}-approve`;
     setActionLoading(key);
+    setActionError(null);
     try {
       await api.market.adminUpdateFacility(clubId, facilityId, { approveConstruction: true });
       await loadData();
     } catch (error) {
-      alert((error as Error).message || "Error al aprobar obra");
+      setActionError(getApiErrorMessage(error, "No se pudo aprobar la obra."));
     } finally {
       setActionLoading(null);
     }
@@ -79,14 +87,37 @@ export default function SportsCitiesTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20 text-slate-500 font-bold uppercase tracking-widest">
-        Cargando ciudades deportivas...
-      </div>
+      <MarketRequestState
+        title="Cargando ciudades deportivas..."
+        loadingLabel="Estamos sincronizando las ciudades y el estado de obras."
+        accentClassName="text-emerald-500"
+        className="w-full min-h-[240px] bg-transparent"
+      />
+    );
+  }
+
+  if (loadError) {
+    return (
+      <MarketRequestState
+        title="Cargando ciudades deportivas..."
+        error={loadError}
+        onRetry={loadData}
+        className="w-full min-h-[240px] bg-transparent"
+      />
     );
   }
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-300">
+      {actionError && (
+        <div className="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-100">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-400" />
+          <div>
+            <p className="font-black uppercase tracking-wide text-red-300">Accion no completada</p>
+            <p className="mt-1 text-red-100/90">{actionError}</p>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
           <h2 className="text-xl font-black text-white uppercase tracking-wider flex items-center gap-2">
@@ -127,13 +158,13 @@ export default function SportsCitiesTab() {
               key={city.clubId}
               className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden"
             >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-950/50">
-                <div>
-                  <h3 className="font-black text-white uppercase tracking-wide">{city.clubName}</h3>
-                  <p className="text-[10px] text-slate-600 font-mono mt-0.5">{city.clubId}</p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-800 bg-slate-950/50">
+                <div className="min-w-0">
+                  <h3 className="font-black text-white uppercase tracking-wide truncate">{city.clubName}</h3>
+                  <p className="text-[10px] text-slate-600 font-mono mt-0.5 truncate">{city.clubId}</p>
                 </div>
                 {pending.length > 0 && (
-                  <span className="flex items-center gap-1.5 text-xs font-black uppercase px-3 py-1.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                  <span className="self-start sm:self-auto flex items-center gap-1.5 text-xs font-black uppercase px-3 py-1.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">
                     <Hammer size={14} />
                     {pending.length} en obra
                   </span>
@@ -141,13 +172,13 @@ export default function SportsCitiesTab() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[480px]">
                   <thead>
                     <tr className="text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-800">
-                      <th className="text-left px-5 py-3">Instalación</th>
-                      <th className="text-center px-3 py-3">Nivel</th>
-                      <th className="text-center px-3 py-3">Estado</th>
-                      <th className="text-right px-5 py-3">Acciones</th>
+                      <th className="text-left px-4 sm:px-5 py-3">Instalación</th>
+                      <th className="text-center px-2 sm:px-3 py-3">Nivel</th>
+                      <th className="hidden sm:table-cell text-center px-2 sm:px-3 py-3">Estado</th>
+                      <th className="text-right px-4 sm:px-5 py-3">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -198,11 +229,20 @@ function FacilityRow({
 
   return (
     <tr className="border-b border-slate-800/60 hover:bg-slate-800/20 transition-colors">
-      <td className="px-5 py-3">
+      <td className="px-4 sm:px-5 py-3">
         <p className="font-bold text-white text-xs">{FACILITY_LABELS[facilityId]}</p>
+        <div className="sm:hidden mt-1">
+          {isPending ? (
+            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-amber-400">
+              <Hammer size={12} /> → Nv.{upgradingTo}
+            </span>
+          ) : (
+            <span className="text-[10px] font-bold text-slate-600 uppercase">{LEVEL_LABELS[level]}</span>
+          )}
+        </div>
       </td>
-      <td className="px-3 py-3 text-center">
-        <div className="flex items-center justify-center gap-1">
+      <td className="px-2 sm:px-3 py-3 text-center">
+        <div className="flex items-center justify-center gap-0.5 sm:gap-1">
           {([0, 1, 2, 3] as FacilityLevel[]).map((lvl) => (
             <button
               key={lvl}
@@ -210,7 +250,7 @@ function FacilityRow({
               disabled={actionLoading === levelKey}
               onClick={() => onLevelChange(clubId, facilityId, lvl)}
               className={`
-                w-8 h-8 rounded-lg border text-xs font-black transition-all
+                w-7 h-7 sm:w-8 sm:h-8 rounded-lg border text-xs font-black transition-all
                 ${level === lvl
                   ? "border-yellow-400 bg-yellow-400/20 text-yellow-400"
                   : "border-slate-700 bg-slate-800 text-slate-500 hover:border-slate-500"
@@ -223,7 +263,7 @@ function FacilityRow({
           ))}
         </div>
       </td>
-      <td className="px-3 py-3 text-center">
+      <td className="hidden sm:table-cell px-2 sm:px-3 py-3 text-center">
         {isPending ? (
           <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-amber-400">
             <Hammer size={12} /> → Nv.{upgradingTo}
@@ -232,16 +272,17 @@ function FacilityRow({
           <span className="text-[10px] font-bold text-slate-600 uppercase">{LEVEL_LABELS[level]}</span>
         )}
       </td>
-      <td className="px-5 py-3 text-right">
+      <td className="px-4 sm:px-5 py-3 text-right">
         {isPending && (
           <button
             type="button"
             disabled={actionLoading === approveKey}
             onClick={() => onApprove(clubId, facilityId)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-[10px] font-black uppercase hover:bg-emerald-500/25 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-[10px] font-black uppercase hover:bg-emerald-500/25 transition-colors disabled:opacity-50"
           >
             <CheckCircle2 size={14} />
-            {actionLoading === approveKey ? "..." : "Aprobar obra"}
+            <span className="hidden sm:inline">{actionLoading === approveKey ? "..." : "Aprobar obra"}</span>
+            <span className="sm:hidden">{actionLoading === approveKey ? "..." : "Aprobar"}</span>
           </button>
         )}
       </td>

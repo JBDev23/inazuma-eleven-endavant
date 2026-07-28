@@ -52,6 +52,7 @@ export class GameSettingsService {
           pachangaMultiplier: 0.2,
           winnerRewardPp: 0,
           winnerRewardYens: 0,
+          coachXpPerYe: 100,
         },
       });
     }
@@ -66,6 +67,7 @@ export class GameSettingsService {
     pachangaMultiplier: number;
     winnerRewardPp: number;
     winnerRewardYens: number;
+    coachXpPerYe: number;
   }) {
     return {
       session: c.session,
@@ -74,6 +76,7 @@ export class GameSettingsService {
       pachangaMultiplier: c.pachangaMultiplier,
       winnerRewardPp: c.winnerRewardPp,
       winnerRewardYens: c.winnerRewardYens,
+      coachXpPerYe: c.coachXpPerYe,
     };
   }
 
@@ -118,6 +121,7 @@ export class GameSettingsService {
         pachangaMultiplier: dto.pachangaMultiplier,
         winnerRewardPp: dto.winnerRewardPp,
         winnerRewardYens: dto.winnerRewardYens,
+        coachXpPerYe: dto.coachXpPerYe,
       },
       update: {
         minXp: dto.minXp,
@@ -125,6 +129,7 @@ export class GameSettingsService {
         pachangaMultiplier: dto.pachangaMultiplier,
         winnerRewardPp: dto.winnerRewardPp,
         winnerRewardYens: dto.winnerRewardYens,
+        coachXpPerYe: dto.coachXpPerYe,
       },
     });
 

@@ -117,6 +117,20 @@ export class MarketService {
 
     constructor(private prisma: PrismaService) { }
 
+    private async getCoachYeXpPerPoint() {
+        const settings = await this.prisma.gameSettings.findUnique({ where: { id: 1 } });
+        if (!settings) {
+            return YE_XP_PER_POINT;
+        }
+
+        const sessionConfig = await this.prisma.sessionXpConfig.findUnique({
+            where: { session: settings.currentSession },
+            select: { coachXpPerYe: true },
+        });
+
+        return sessionConfig?.coachXpPerYe ?? YE_XP_PER_POINT;
+    }
+
     async login(loginDto: LoginDto) {
         return this.prisma.userClub.findUnique({
             where: { id: loginDto.clubId },
@@ -704,9 +718,76 @@ export class MarketService {
                 ...formatted,
                 unlocked: isFormationAvailableToClub(formation, purchasedIds, coachFormationIds),
                 unlockedByCoach: coachFormationIds.has(formation.id),
+                ownedByClub: purchasedIds.has(formation.id),
                 isActive11: club.activeFormation11Id === formation.id,
                 isActive4: club.activeFormation4Id === formation.id,
             };
+        });
+    }
+
+    async adminGrantFormation(clubId: string, formationId: number) {
+        return this.prisma.$transaction(async (tx) => {
+            const club = await tx.userClub.findUnique({ where: { id: clubId } });
+            const formation = await tx.formation.findUnique({ where: { id: formationId } });
+
+            if (!club) throw new NotFoundException('Club no encontrado');
+            if (!formation) {
+                throw new NotFoundException(`Formación con ID ${formationId} no encontrada`);
+            }
+
+            const existing = await tx.clubFormation.findUnique({
+                where: { clubId_formationId: { clubId, formationId } },
+            });
+
+            if (existing) {
+                throw new BadRequestException('El club ya tiene esta formación asignada.');
+            }
+
+            await tx.clubFormation.create({
+                data: { clubId, formationId },
+            });
+
+            return { success: true as const, formation: formatFormation(formation) };
+        });
+    }
+
+    async adminRevokeFormation(clubId: string, formationId: number) {
+        return this.prisma.$transaction(async (tx) => {
+            const club = await tx.userClub.findUnique({ where: { id: clubId } });
+            if (!club) throw new NotFoundException('Club no encontrado');
+
+            const existing = await tx.clubFormation.findUnique({
+                where: { clubId_formationId: { clubId, formationId } },
+            });
+
+            if (!existing) {
+                throw new BadRequestException('El club no tiene esta formación asignada.');
+            }
+
+            const activeUpdate: {
+                activeFormation11Id?: null;
+                activeFormation4Id?: null;
+            } = {};
+
+            if (club.activeFormation11Id === formationId) {
+                activeUpdate.activeFormation11Id = null;
+            }
+            if (club.activeFormation4Id === formationId) {
+                activeUpdate.activeFormation4Id = null;
+            }
+
+            await tx.clubFormation.delete({
+                where: { clubId_formationId: { clubId, formationId } },
+            });
+
+            if (Object.keys(activeUpdate).length > 0) {
+                await tx.userClub.update({
+                    where: { id: clubId },
+                    data: activeUpdate,
+                });
+            }
+
+            return { success: true as const };
         });
     }
 
@@ -1079,7 +1160,8 @@ export class MarketService {
             throw new NotFoundException(`El club con ID ${clubId} no existe.`);
         }
 
-        return buildYeRedemptionPreview(allocations, club.coaches, club.yens, YE_XP_PER_POINT);
+        const xpPerYe = await this.getCoachYeXpPerPoint();
+        return buildYeRedemptionPreview(allocations, club.coaches, club.yens, xpPerYe);
     }
 
     async redeemYe(clubId: string, allocations: YeAllocationDto[]): Promise<RedeemYeResult> {
@@ -1107,6 +1189,8 @@ export class MarketService {
                 throw new BadRequestException(`No tienes suficientes YE. Disponibles: ${club.yens}.`);
             }
 
+            const xpPerYe = await this.getCoachYeXpPerPoint();
+
             const coachIds = new Set(club.coaches.map((c) => c.id));
             for (const { coachId } of allocations) {
                 if (!coachIds.has(coachId)) {
@@ -1123,7 +1207,7 @@ export class MarketService {
                 const coach = club.coaches.find((c) => c.id === coachId)!;
                 if (coach.level >= MAX_COACH_LEVEL) continue;
 
-                const xpGained = yeCount * YE_XP_PER_POINT;
+                const xpGained = yeCount * xpPerYe;
                 const { level, experience } = addExperience(
                     coach.level,
                     coach.experience,

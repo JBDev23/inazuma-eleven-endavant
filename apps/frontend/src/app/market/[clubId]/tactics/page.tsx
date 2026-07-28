@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/services/api";
+import { MarketRequestState } from "@/components/market/MarketRequestState";
 import { buildFieldSlots, getFallbackFormation } from "@/lib/formation-field";
 import type { Coach, FormationWithClubStatus, PlayerWithDetails, UserClub } from "@inazuma/shared";
 import { AlignmentPanel } from "@/components/tactics/AlignmentPanel";
@@ -29,6 +30,7 @@ export default function TacticsPage({ params }: { params: Promise<{ clubId: stri
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [clubFormations, setClubFormations] = useState<FormationWithClubStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
   const [savedRosterKey, setSavedRosterKey] = useState("");
   const [selectedFormation11Id, setSelectedFormation11Id] = useState<number | null>(null);
@@ -74,6 +76,8 @@ export default function TacticsPage({ params }: { params: Promise<{ clubId: stri
   );
 
   const loadData = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const [clubData, formationsData] = await Promise.all([
         api.market.getUserClub(clubId),
@@ -94,6 +98,7 @@ export default function TacticsPage({ params }: { params: Promise<{ clubId: stri
       setClubFormations(formationsData);
     } catch (err) {
       console.error(err);
+      setLoadError(err);
     } finally {
       setLoading(false);
     }
@@ -279,10 +284,16 @@ export default function TacticsPage({ params }: { params: Promise<{ clubId: stri
   };
 
   if (loading) {
+    return <MarketRequestState title="Abriendo pizarra..." loadingLabel="Estamos cargando la alineacion, las formaciones y tu plantilla." accentClassName="text-blue-500" />;
+  }
+
+  if (loadError) {
     return (
-      <div className="h-screen bg-slate-950 flex items-center justify-center text-blue-500 font-black text-2xl uppercase animate-pulse">
-        Abriendo Pizarra...
-      </div>
+      <MarketRequestState
+        title="Abriendo pizarra..."
+        error={loadError}
+        onRetry={loadData}
+      />
     );
   }
 

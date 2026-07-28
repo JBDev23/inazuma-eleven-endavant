@@ -5,6 +5,8 @@ import { api } from "@/services/api";
 import { Team } from "@inazuma/shared";
 import Image from "next/image";
 
+export const dynamic = "force-dynamic";
+
 export default async function EditorSelectPage() {
   const teams = await api.teams.list();
 

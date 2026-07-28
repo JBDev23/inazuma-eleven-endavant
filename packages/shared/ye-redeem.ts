@@ -1,8 +1,8 @@
 import { MAX_COACH_LEVEL } from './coach-stats';
 import { addExperience, getXpRequiredForLevel } from './xp.utils';
 
-/** XP que otorga cada YE al canjearlo. Modificable desde un solo sitio. */
-export const YE_XP_PER_POINT = 50;
+/** XP por defecto que otorga cada YE al canjearlo. */
+export const YE_XP_PER_POINT = 100;
 
 export interface YeAllocation {
   coachId: number;

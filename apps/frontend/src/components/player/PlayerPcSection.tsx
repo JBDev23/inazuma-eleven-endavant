@@ -32,7 +32,7 @@ import {
   type StatKey,
   type PlayerStats,
 } from "@inazuma/shared";
-import { api } from "@/services/api";
+import { api, getApiErrorMessage } from "@/services/api";
 import { ResourceCostBadge } from "@/components/economy/ResourceCostBadge";
 
 const STAT_OPTIONS: Array<{ key: StatKey; label: string; icon: LucideIcon }> = [
@@ -73,6 +73,7 @@ export function PlayerPcSection({
   const [selectedStat, setSelectedStat] = useState<StatKey | null>(null);
   const [step, setStep] = useState<"idle" | "confirm">("idle");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [liveBonuses, setLiveBonuses] = useState(player.statBonuses ?? {});
 
   const canSpend =
@@ -119,6 +120,7 @@ export function PlayerPcSection({
     if (!selectedStat) return;
     try {
       setIsProcessing(true);
+      setActionError(null);
       const result = await api.market.spendPc(clubId, player.id, selectedStat);
       setLiveBonuses(result.statBonuses);
       onSpendComplete?.(result.statBonuses);
@@ -126,7 +128,7 @@ export function PlayerPcSection({
       setSelectedStat(null);
       setIsOpen(false);
     } catch (error: unknown) {
-      alert(`❌ ${error instanceof Error ? error.message : "Error al gastar PC"}`);
+      setActionError(getApiErrorMessage(error, "Error al gastar PC."));
     } finally {
       setIsProcessing(false);
     }
@@ -149,6 +151,16 @@ export function PlayerPcSection({
                 {label} +{liveBonuses[key]}
               </span>
             ))}
+          </div>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-100">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-400" />
+          <div>
+            <p className="font-black uppercase tracking-wide text-red-300">Accion no completada</p>
+            <p className="mt-1">{actionError}</p>
           </div>
         </div>
       )}

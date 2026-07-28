@@ -52,11 +52,11 @@ export default function AdminPlayerFilters({ filters, setFilters, clubs, totalRe
     filters.season !== "all";
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-t-2xl p-4 flex flex-col gap-4">
+    <div className="bg-slate-900 border border-slate-800 rounded-t-2xl p-3 sm:p-4 flex flex-col gap-3 sm:gap-4">
       
       {/* Fila 1: Buscador y Contador */}
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+        <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
           <input
             type="text"
@@ -67,14 +67,14 @@ export default function AdminPlayerFilters({ filters, setFilters, clubs, totalRe
           />
         </div>
         <div className="shrink-0 bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl flex items-center justify-center">
-          <span className="text-sm font-black text-slate-400">
+          <span className="text-xs sm:text-sm font-black text-slate-400 whitespace-nowrap">
             {totalResults} RESULTADOS
           </span>
         </div>
       </div>
 
       {/* Fila 2: Filtros Selectores */}
-      <div className="flex flex-col md:flex-row gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:flex 2xl:flex-row gap-3">
 
         {/* Filtro: Equipo (Lore) */}
         <select 

@@ -1,15 +1,16 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { Loader2, Users, UserCircle2 } from "lucide-react";
+import { AlertTriangle, Users, UserCircle2 } from "lucide-react";
 import PlayerGrid from "@/components/player/PlayerGrid";
 import CoachGrid from "@/components/coach/CoachGrid";
 import CoachMarketModal from "@/components/coach/CoachMarketModal";
 import { canAffordResource, pickClubResources, getFreeMarketPlayerPrice, resolveClubFacilities, type ClubResources, type Coach, type Player } from "@inazuma/shared";
-import { api } from "@/services/api";
+import { api, getApiErrorMessage } from "@/services/api";
 import PlayerModal from "@/components/player/PlayerModal";
 import { ClubResourcesDisplay } from "@/components/economy/ClubResourcesDisplay";
 import { ResourceCostBadge } from "@/components/economy/ResourceCostBadge";
+import { MarketRequestState } from "@/components/market/MarketRequestState";
 
 type MarketTab = "players" | "coaches";
 
@@ -22,10 +23,14 @@ export default function FreeAgentsPage({ params }: { params: Promise<{ clubId: s
   const [facilities, setFacilities] = useState<import("@inazuma/shared").ClubFacilityRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [selectedCoach, setSelectedCoach] = useState<Coach | null>(null);
 
   const loadMarket = async () => {
+    setIsLoading(true);
+    setLoadError(null);
     try {
       const [freeAgents, freeCoaches, resClub] = await Promise.all([
         api.market.getFreeAgents(),
@@ -39,6 +44,7 @@ export default function FreeAgentsPage({ params }: { params: Promise<{ clubId: s
       setFacilities(resClub.facilities ?? []);
     } catch (error) {
       console.error("Error cargando el mercado", error);
+      setLoadError(error);
     } finally {
       setIsLoading(false);
     }
@@ -51,12 +57,13 @@ export default function FreeAgentsPage({ params }: { params: Promise<{ clubId: s
   const handlePlayerAction = async (action: "buy" | "toll" | "sell", nickname: string) => {
     try {
       setIsProcessing(true);
+      setActionError(null);
       const res = await api.market.performAction(clubId, action, nickname);
       setResources((prev) => ({ ...prev, pp: res.newBalance as number }));
       setSelectedPlayer(null);
-      loadMarket();
+      await loadMarket();
     } catch (error: unknown) {
-      alert(`❌ ${error instanceof Error ? error.message : "Error desconocido"}`);
+      setActionError(getApiErrorMessage(error, "No se pudo completar la accion del jugador."));
     } finally {
       setIsProcessing(false);
     }
@@ -65,23 +72,29 @@ export default function FreeAgentsPage({ params }: { params: Promise<{ clubId: s
   const handleBuyCoach = async (coachId: number) => {
     try {
       setIsProcessing(true);
+      setActionError(null);
       const res = await api.market.buyCoach(clubId, coachId);
       setResources((prev) => ({ ...prev, pp: res.newBalance as number }));
       setSelectedCoach(null);
-      loadMarket();
+      await loadMarket();
     } catch (error: unknown) {
-      alert(`❌ ${error instanceof Error ? error.message : "Error desconocido"}`);
+      setActionError(getApiErrorMessage(error, "No se pudo fichar al entrenador."));
     } finally {
       setIsProcessing(false);
     }
   };
 
   if (isLoading) {
+    return <MarketRequestState title="Cargando mercado..." loadingLabel="Estamos sincronizando jugadores, entrenadores y recursos del club." />;
+  }
+
+  if (loadError) {
     return (
-      <div className="w-full min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
-        <Loader2 className="animate-spin mb-4 text-emerald-500" size={48} />
-        <h2 className="text-xl font-black uppercase tracking-widest">Cargando mercado...</h2>
-      </div>
+      <MarketRequestState
+        title="Cargando mercado..."
+        error={loadError}
+        onRetry={loadMarket}
+      />
     );
   }
 
@@ -131,6 +144,15 @@ export default function FreeAgentsPage({ params }: { params: Promise<{ clubId: s
       </div>
 
       <div className="max-w-7xl mx-auto">
+        {actionError && (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-100">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-400" />
+            <div>
+              <p className="font-black uppercase tracking-wide text-red-300">No se pudo completar la accion</p>
+              <p className="mt-1 text-red-100/90">{actionError}</p>
+            </div>
+          </div>
+        )}
         {activeTab === "players" && (
           <PlayerGrid
             onPlayerClick={(player) => setSelectedPlayer(player)}

@@ -2,12 +2,13 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Droplets, Loader2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Droplets } from "lucide-react";
 import type { ClubConsumableWithDetails, ClubResources, Consumable, ConsumableCategory } from "@inazuma/shared";
 import { CONSUMABLE_CATEGORY_LABELS, CONSUMABLE_CATEGORY_ORDER, pickClubResources } from "@inazuma/shared";
-import { api } from "@/services/api";
+import { api, getApiErrorMessage } from "@/services/api";
 import { ClubResourcesDisplay } from "@/components/economy/ClubResourcesDisplay";
 import ConsumableCard from "@/components/consumables/ConsumableCard";
+import { MarketRequestState } from "@/components/market/MarketRequestState";
 
 export default function ConsumablesShopPage({ params }: { params: Promise<{ clubId: string }> }) {
   const { clubId } = use(params);
@@ -16,8 +17,12 @@ export default function ConsumablesShopPage({ params }: { params: Promise<{ club
   const [resources, setResources] = useState<ClubResources>({ pp: 0, pe: 0, yens: 0, pc: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const loadShop = async () => {
+    setIsLoading(true);
+    setLoadError(null);
     try {
       const [consumables, clubConsumables, club] = await Promise.all([
         api.market.getConsumableCatalog(),
@@ -29,6 +34,7 @@ export default function ConsumablesShopPage({ params }: { params: Promise<{ club
       setResources(pickClubResources(club));
     } catch (error) {
       console.error("Error cargando tienda de consumibles", error);
+      setLoadError(error);
     } finally {
       setIsLoading(false);
     }
@@ -43,22 +49,28 @@ export default function ConsumablesShopPage({ params }: { params: Promise<{ club
   const handleBuy = async (consumableId: number) => {
     try {
       setIsProcessing(true);
+      setActionError(null);
       const res = await api.market.buyConsumable(clubId, consumableId);
       setResources((prev) => ({ ...prev, pp: res.newBalance }));
       await loadShop();
     } catch (error: unknown) {
-      alert(`❌ ${error instanceof Error ? error.message : "Error al comprar"}`);
+      setActionError(getApiErrorMessage(error, "No se pudo comprar el consumible."));
     } finally {
       setIsProcessing(false);
     }
   };
 
   if (isLoading) {
+    return <MarketRequestState title="Cargando tienda..." loadingLabel="Estamos sincronizando catalogo, inventario y recursos del club." accentClassName="text-sky-500" />;
+  }
+
+  if (loadError) {
     return (
-      <div className="w-full min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
-        <Loader2 className="animate-spin mb-4 text-sky-500" size={48} />
-        <h2 className="text-xl font-black uppercase tracking-widest">Cargando tienda...</h2>
-      </div>
+      <MarketRequestState
+        title="Cargando tienda..."
+        error={loadError}
+        onRetry={loadShop}
+      />
     );
   }
 
@@ -109,6 +121,15 @@ export default function ConsumablesShopPage({ params }: { params: Promise<{ club
       )}
 
       <div className="max-w-7xl mx-auto">
+        {actionError && (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-100">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-400" />
+            <div>
+              <p className="font-black uppercase tracking-wide text-red-300">Compra no completada</p>
+              <p className="mt-1 text-red-100/90">{actionError}</p>
+            </div>
+          </div>
+        )}
         {CONSUMABLE_CATEGORY_ORDER.map((category) => {
           const categoryItems = catalog.filter((c) => c.category === category);
           if (categoryItems.length === 0) return null;
