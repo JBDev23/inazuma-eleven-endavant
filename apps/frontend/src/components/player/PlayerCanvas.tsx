@@ -91,8 +91,10 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
     const currentTeamSlug = (gatewayNode.data.sourceTeamSlug as string) || baseTeamSlug;
 
     const targetMap = await api.market.getTeamMapForUser(clubId, targetTeamSlug, currentTeamSlug);
+    const targetNodes = targetMap.nodes as Node[];
+    const targetEdges = targetMap.edges as Edge[];
 
-    const entryNode = (targetMap.nodes as Node[]).find(
+    const entryNode = targetNodes.find(
       (n) => n.type === 'entryNode' && n.data.sourceTeamSlug === currentTeamSlug,
     );
 
@@ -104,13 +106,13 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
     const deltaX = gatewayNode.position.x - entryNode.position.x;
     const deltaY = gatewayNode.position.y - entryNode.position.y + 150;
 
-    const shiftedNodes = targetMap.nodes.map((node: Node) => ({
+    const shiftedNodes = targetNodes.map((node) => ({
       ...node,
       id: `${targetMapId}-${node.id}`,
       position: { x: node.position.x + deltaX, y: node.position.y + deltaY },
     }));
 
-    const shiftedEdges = targetMap.edges.map((edge: Edge) => ({
+    const shiftedEdges = targetEdges.map((edge) => ({
       ...edge,
       id: `${targetMapId}-${edge.id}`,
       source: `${targetMapId}-${edge.source}`,
