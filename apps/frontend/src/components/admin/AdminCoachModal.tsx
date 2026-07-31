@@ -49,7 +49,6 @@ export default function AdminCoachModal({
     spriteUrl: string | null;
     teamId: number;
     season: number;
-    price: number;
     level: number;
     experience: number;
     isFreeAgent: boolean;
@@ -61,7 +60,6 @@ export default function AdminCoachModal({
     spriteUrl: (coach as Coach).spriteUrl ?? null,
     teamId: (coach as Coach).teamId ?? defaultTeamId,
     season: (coach as Coach).season ?? 1,
-    price: (coach as Coach).price ?? 500,
     level: (coach as Coach).level ?? 1,
     experience: (coach as Coach).experience ?? 0,
     isFreeAgent: initialIsFreeAgent,
@@ -96,7 +94,6 @@ export default function AdminCoachModal({
         spriteUrl: formData.spriteUrl,
         teamId: Number(formData.teamId),
         season: formData.season,
-        price: formData.price,
         level: formData.level,
         experience: formData.experience,
         isFreeAgent: formData.ownerId ? false : formData.isFreeAgent,
@@ -185,15 +182,14 @@ export default function AdminCoachModal({
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Precio (PP)</label>
-              <input
-                type="number"
-                min={0}
-                value={formData.price}
-                onChange={(e) => setFormData((p) => ({ ...p, price: parseInt(e.target.value, 10) || 0 }))}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-yellow-400 font-black focus:border-cyan-500 focus:outline-hidden"
-              />
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+              <p className="text-xs font-bold text-slate-400 uppercase mb-0.5">Precio mercado</p>
+              <p className="text-yellow-400 font-black tabular-nums">
+                {(coach as Coach).price ?? 0} PP
+              </p>
+              <p className="text-[10px] text-slate-500 mt-1">
+                Calculado por nivel (config global en Ajustes)
+              </p>
             </div>
 
             <div>

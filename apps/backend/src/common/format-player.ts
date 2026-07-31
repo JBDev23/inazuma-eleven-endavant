@@ -2,6 +2,9 @@ import {
   formatPlayerWithMoves,
   formatPlayersWithMoves,
   parseStatBonuses,
+  withComputedPlayerPrice,
+  withComputedCoachPrice,
+  type EconomyPricingSettings,
   type RawPlayerWithMoves,
 } from '@inazuma/shared';
 import { formatFormation } from './format-formation';
@@ -13,6 +16,7 @@ export { formatPlayerWithMoves, formatPlayersWithMoves };
 
 export function enrichPlayerWithEquipment(
   rawPlayer: RawPlayerWithMoves | null | undefined,
+  economy?: EconomyPricingSettings,
 ) {
   const player = formatPlayerWithMoves(rawPlayer);
   if (!player) return null;
@@ -35,18 +39,36 @@ export function enrichPlayerWithEquipment(
     player.secondaryItem = null;
   }
 
-  return player;
+  return economy ? withComputedPlayerPrice(player, economy) : player;
 }
 
-export function enrichPlayersWithEquipment(rawPlayers: RawPlayerWithMoves[]) {
+export function enrichPlayersWithEquipment(
+  rawPlayers: RawPlayerWithMoves[],
+  economy?: EconomyPricingSettings,
+) {
   return rawPlayers
-    .map((player) => enrichPlayerWithEquipment(player))
+    .map((player) => enrichPlayerWithEquipment(player, economy))
     .filter((player): player is NonNullable<typeof player> => player != null);
+}
+
+export function applyPlayerEconomyPrice<T extends { level?: number | null; statBonuses?: unknown; price?: number }>(
+  player: T,
+  economy: EconomyPricingSettings,
+): T {
+  return withComputedPlayerPrice(player, economy);
+}
+
+export function applyCoachEconomyPrice<T extends { level?: number | null; price?: number }>(
+  coach: T,
+  economy: EconomyPricingSettings,
+): T {
+  return withComputedCoachPrice(coach, economy);
 }
 
 export function formatClubWithRoster<
   T extends {
     roster?: unknown[];
+    coaches?: unknown[];
     formations?: unknown[];
     formation11?: unknown;
     formation4?: unknown;
@@ -54,11 +76,20 @@ export function formatClubWithRoster<
     consumables?: unknown[];
     facilities?: unknown[];
   },
->(club: T) {
+>(club: T, economy?: EconomyPricingSettings) {
   const formatted: T & { formation11?: unknown; formation4?: unknown } = { ...club };
 
   if (club.roster) {
-    formatted.roster = enrichPlayersWithEquipment(club.roster as RawPlayerWithMoves[]);
+    formatted.roster = enrichPlayersWithEquipment(
+      club.roster as RawPlayerWithMoves[],
+      economy,
+    );
+  }
+
+  if (club.coaches && economy) {
+    formatted.coaches = (club.coaches as Array<{ level?: number | null; price?: number }>).map(
+      (coach) => withComputedCoachPrice(coach, economy),
+    );
   }
 
   if (club.items) {
@@ -118,10 +149,13 @@ export function formatClubWithRoster<
   return formatted;
 }
 
-export function formatTeamWithPlayers<T extends { players?: unknown[] }>(team: T) {
+export function formatTeamWithPlayers<T extends { players?: unknown[] }>(
+  team: T,
+  economy?: EconomyPricingSettings,
+) {
   if (!team.players) return team;
   return {
     ...team,
-    players: enrichPlayersWithEquipment(team.players as RawPlayerWithMoves[]),
+    players: enrichPlayersWithEquipment(team.players as RawPlayerWithMoves[], economy),
   };
 }

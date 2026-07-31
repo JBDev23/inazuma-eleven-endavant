@@ -5,15 +5,19 @@ import type { UserClub, Team } from "@inazuma/shared";
 import { ClubShield } from "@/components/club/ClubShield";
 
 interface AdminClubModalProps {
-  club: UserClub;
+  club: UserClub | Partial<UserClub>;
   teams: Team[];
   onClose: () => void;
-  onSave: (clubId: string, updatedData: Partial<UserClub>) => Promise<void>;
+  onSave: (clubId: string | null, updatedData: Partial<UserClub> & { password?: string }) => Promise<void>;
 }
 
 export default function AdminClubModal({ club, teams, onClose, onSave }: AdminClubModalProps) {
-  const [formData, setFormData] = useState<Partial<UserClub>>({
-    name: club.name,
+  const clubId = (club as UserClub).id;
+  const isNew = !clubId;
+
+  const [formData, setFormData] = useState({
+    name: club.name ?? "",
+    password: isNew ? "1234" : "",
     pp: club.pp ?? 1000,
     baseTeamSlug: club.baseTeamSlug || "",
     shieldUrl: club.shieldUrl || "",
@@ -23,12 +27,23 @@ export default function AdminClubModal({ club, teams, onClose, onSave }: AdminCl
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!formData.name.trim()) return;
+    if (isNew && !formData.password.trim()) return;
+
     setIsSaving(true);
     try {
-      await onSave(club.id, {
-        ...formData,
-        baseTeamSlug: formData.baseTeamSlug === "" ? undefined : formData.baseTeamSlug
-      });
+      const payload: Partial<UserClub> & { password?: string } = {
+        name: formData.name.trim(),
+        pp: formData.pp,
+        baseTeamSlug: formData.baseTeamSlug === "" ? null : formData.baseTeamSlug,
+        shieldUrl: formData.shieldUrl.trim() || undefined,
+      };
+
+      if (isNew || formData.password.trim()) {
+        payload.password = formData.password.trim();
+      }
+
+      await onSave(isNew ? null : clubId, payload);
     } finally {
       setIsSaving(false);
     }
@@ -40,8 +55,11 @@ export default function AdminClubModal({ club, teams, onClose, onSave }: AdminCl
         
         <div className="bg-slate-950 p-4 border-b border-slate-800 flex justify-between items-center">
           <div>
-            <h3 className="font-black text-white uppercase">Editar Club</h3>
-            <p className="text-[10px] text-slate-500 font-mono">ID: {club.id}</p>
+            <h3 className="font-black text-white uppercase">{isNew ? "Nuevo Club" : "Editar Club"}</h3>
+            {!isNew && <p className="text-[10px] text-slate-500 font-mono">ID: {clubId}</p>}
+            {isNew && (
+              <p className="text-[10px] text-slate-500">Ideal para equipos NPC de pachangas y partidos.</p>
+            )}
           </div>
           <button type="button" onClick={onClose} className="text-slate-500 hover:text-white">✕</button>
         </div>
@@ -54,7 +72,22 @@ export default function AdminClubModal({ club, teams, onClose, onSave }: AdminCl
               type="text" 
               value={formData.name}
               onChange={(e) => setFormData({...formData, name: e.target.value})}
+              required
               className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-yellow-500 focus:outline-hidden"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
+              PIN / Contraseña {isNew ? "" : "(dejar vacío para no cambiar)"}
+            </label>
+            <input
+              type="text"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              required={isNew}
+              placeholder={isNew ? "1234" : "••••"}
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white font-mono focus:border-yellow-500 focus:outline-hidden"
             />
           </div>
 
@@ -69,7 +102,6 @@ export default function AdminClubModal({ club, teams, onClose, onSave }: AdminCl
             />
           </div>
 
-          {/* 🎯 2. Reemplazamos el input por un SELECT */}
           <div>
             <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Equipo Base</label>
             <select 
@@ -92,7 +124,7 @@ export default function AdminClubModal({ club, teams, onClose, onSave }: AdminCl
               <div className="w-14 h-14 bg-slate-950 border border-slate-700 rounded-xl flex items-center justify-center shrink-0 p-1.5">
                 <ClubShield
                   shieldUrl={formData.shieldUrl}
-                  alt={formData.name || club.name}
+                  alt={formData.name || club.name || "Club"}
                   className="w-full h-full object-contain"
                 />
               </div>
@@ -112,7 +144,7 @@ export default function AdminClubModal({ club, teams, onClose, onSave }: AdminCl
           <div className="pt-4 flex gap-3">
             <button type="button" onClick={onClose} className="flex-1 p-3 rounded-lg font-bold text-slate-400 bg-slate-800 hover:bg-slate-700">CANCELAR</button>
             <button type="submit" disabled={isSaving} className="flex-1 p-3 rounded-lg font-black text-slate-900 bg-yellow-500 hover:bg-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.4)] disabled:opacity-50">
-              {isSaving ? "GUARDANDO..." : "GUARDAR"}
+              {isSaving ? "GUARDANDO..." : isNew ? "CREAR" : "GUARDAR"}
             </button>
           </div>
 

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Patch } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query, Patch } from '@nestjs/common';
 import { MarketService } from './market.service';
 import { LoginDto } from './dto/login.dto';
 import { BuyFormationDto } from './dto/buy-formation.dto';
@@ -9,7 +9,8 @@ import { RedeemPeDto } from './dto/redeem-pe.dto';
 import { RedeemYeDto } from './dto/redeem-ye.dto';
 import { SpendPcDto } from './dto/spend-pc.dto';
 import { StartFacilityUpgradeDto, AdminUpdateFacilityDto, SetPitchElementDto } from './dto/sports-city.dto';
-import { UserClub } from '@inazuma/shared';
+import { CreateUserClubDto } from './dto/create-user-club.dto';
+import { UpdateUserClubDto } from './dto/update-user-club.dto';
 
 @Controller('market')
 export class MarketController {
@@ -23,6 +24,17 @@ export class MarketController {
   @Get('user-clubs')
   async getUserClubs() {
     return this.marketService.getUserClubs();
+  }
+
+  @Post('user-clubs')
+  async createUserClub(@Body() body: CreateUserClubDto) {
+    return this.marketService.createUserClub(body);
+  }
+
+  @Delete('user-clubs/:clubId')
+  @HttpCode(HttpStatus.OK)
+  async deleteUserClub(@Param('clubId') clubId: string) {
+    return this.marketService.deleteUserClub(clubId);
   }
 
   @Get('club/:clubId')
@@ -56,7 +68,7 @@ export class MarketController {
   }
 
   @Patch('user-clubs/:clubId')
-  async updateUserClub(@Param('clubId') clubId: string, @Body() body: Partial<UserClub>) {
+  async updateUserClub(@Param('clubId') clubId: string, @Body() body: UpdateUserClubDto) {
     return this.marketService.updateUserClub(clubId, body);
   }
 

@@ -253,6 +253,18 @@ export const api = {
         fallbackMessage: "Error al guardar el mapa del equipo",
       });
     },
+
+    async update(teamId: number, updatedData: Partial<Pick<Team, "name" | "slug" | "type">>) {
+      return requestJson<Team>(`/teams/${teamId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedData),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "Error al actualizar el equipo",
+      });
+    },
   },
 
   market: {
@@ -337,6 +349,25 @@ export const api = {
         fallbackMessage: "No se pudo liberar al entrenador.",
       });
     },
+    async createUserClub(data: {
+      name: string;
+      password: string;
+      baseTeamSlug?: string | null;
+      shieldUrl?: string | null;
+      pp?: number;
+      pe?: number;
+      yens?: number;
+      pc?: number;
+    }) {
+      return requestJson<UserClub>("/market/user-clubs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo crear el club.",
+      });
+    },
+
     async updateUserClub(clubId: string, updatedData: Partial<UserClub>) {
       const res = await fetch(`${getApiBase()}/market/user-clubs/${clubId}`, {
         method: "PATCH",
@@ -345,6 +376,14 @@ export const api = {
       });
       if (!res.ok) throw new Error((await res.json()).message || "Error al actualizar club");
       return res.json();
+    },
+
+    async deleteUserClub(clubId: string) {
+      return requestJson<{ success: true }>(`/market/user-clubs/${clubId}`, {
+        method: "DELETE",
+        timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
+        fallbackMessage: "No se pudo eliminar el club.",
+      });
     },
 
     async addTransaction(clubId: string, transactionData: AddTransactionDto) {
@@ -774,7 +813,14 @@ export const api = {
       });
     },
 
-    async update(data: { currentSession?: number }): Promise<GameSettings> {
+    async update(data: {
+      currentSession?: number;
+      basePlayerPrice?: number;
+      playerPricePerLevel?: number;
+      baseCoachPrice?: number;
+      coachPricePerLevel?: number;
+      playerPricePerPc?: number;
+    }): Promise<GameSettings> {
       return requestJson<GameSettings>("/game-settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

@@ -59,7 +59,10 @@ interface PlayerPcSectionProps {
   availablePc: number;
   clubId: string;
   enablePcSpend?: boolean;
-  onSpendComplete?: (updated: Partial<Record<StatKey, number>>) => void;
+  onSpendComplete?: (updated: {
+    statBonuses: Partial<Record<StatKey, number>>;
+    marketPrice: number;
+  }) => void;
 }
 
 export function PlayerPcSection({
@@ -123,7 +126,10 @@ export function PlayerPcSection({
       setActionError(null);
       const result = await api.market.spendPc(clubId, player.id, selectedStat);
       setLiveBonuses(result.statBonuses);
-      onSpendComplete?.(result.statBonuses);
+      onSpendComplete?.({
+        statBonuses: result.statBonuses,
+        marketPrice: result.marketPrice,
+      });
       setStep("idle");
       setSelectedStat(null);
       setIsOpen(false);

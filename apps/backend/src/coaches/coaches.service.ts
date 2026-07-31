@@ -6,11 +6,12 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { CoachModifiers } from '@inazuma/shared';
-import { buildBaseModifiersFromMax, STAT_KEYS } from '@inazuma/shared';
+import { buildBaseModifiersFromMax, STAT_KEYS, withComputedCoachPrice } from '@inazuma/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { coachWithFormationsInclude } from '../common/prisma-includes';
 import { CreateCoachDto } from './dto/create-coach.dto';
 import { UpdateCoachDto } from './dto/update-coach.dto';
+import { getEconomyPricing } from '../common/economy-pricing';
 
 function normalizeCoachModifiers(value: unknown): CoachModifiers | null {
   if (!value || typeof value !== 'object') return null;
@@ -30,6 +31,11 @@ function normalizeCoachModifiers(value: unknown): CoachModifiers | null {
 export class CoachesService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async withPrice<T extends { level?: number | null; price?: number }>(coach: T) {
+    const economy = await getEconomyPricing(this.prisma);
+    return withComputedCoachPrice(coach, economy);
+  }
+
   async create(createCoachDto: CreateCoachDto) {
     const data: any = {
       name: createCoachDto.name,
@@ -39,7 +45,6 @@ export class CoachesService {
     };
 
     if (createCoachDto.season !== undefined) data.season = createCoachDto.season;
-    if (createCoachDto.price !== undefined) data.price = createCoachDto.price;
     if (createCoachDto.level !== undefined) data.level = createCoachDto.level;
     if (createCoachDto.experience !== undefined) data.experience = createCoachDto.experience;
 
@@ -47,11 +52,9 @@ export class CoachesService {
     if (createCoachDto.isFreeAgent !== undefined) data.isFreeAgent = createCoachDto.isFreeAgent;
 
     if (createCoachDto.ownerId !== undefined && createCoachDto.ownerId !== null) {
-      // Si tiene dueño, forzamos que no sea agente libre.
       data.isFreeAgent = false;
     }
 
-    // JSON fields: normalizamos/validamos para evitar NaNs al recalcular.
     if (createCoachDto.maxModifiers !== undefined) {
       const maxModifiers = normalizeCoachModifiers(createCoachDto.maxModifiers);
       if (!maxModifiers) {
@@ -71,14 +74,19 @@ export class CoachesService {
       data.baseModifiers = baseModifiers as unknown as Prisma.InputJsonValue;
     }
 
-    return this.prisma.coach.create({ data });
+    const coach = await this.prisma.coach.create({ data });
+    return this.withPrice(coach);
   }
 
   async findAll() {
-    return this.prisma.coach.findMany({
-      orderBy: { id: 'asc' },
-      include: coachWithFormationsInclude,
-    });
+    const [coaches, economy] = await Promise.all([
+      this.prisma.coach.findMany({
+        orderBy: { id: 'asc' },
+        include: coachWithFormationsInclude,
+      }),
+      getEconomyPricing(this.prisma),
+    ]);
+    return coaches.map((c) => withComputedCoachPrice(c, economy));
   }
 
   async findOne(id: number) {
@@ -89,7 +97,7 @@ export class CoachesService {
     if (!coach) {
       throw new NotFoundException(`Entrenador con ID ${id} no encontrado.`);
     }
-    return coach;
+    return this.withPrice(coach);
   }
 
   async update(id: number, updateCoachDto: UpdateCoachDto) {
@@ -101,7 +109,6 @@ export class CoachesService {
     if (updateCoachDto.nickname !== undefined) data.nickname = updateCoachDto.nickname ?? null;
     if (updateCoachDto.spriteUrl !== undefined) data.spriteUrl = updateCoachDto.spriteUrl ?? null;
     if (updateCoachDto.season !== undefined) data.season = updateCoachDto.season;
-    if (updateCoachDto.price !== undefined) data.price = updateCoachDto.price;
     if (updateCoachDto.level !== undefined) data.level = updateCoachDto.level;
     if (updateCoachDto.experience !== undefined) data.experience = updateCoachDto.experience;
     if (updateCoachDto.teamId !== undefined) data.teamId = updateCoachDto.teamId;
@@ -133,10 +140,11 @@ export class CoachesService {
     }
 
     try {
-      return await this.prisma.coach.update({
+      const coach = await this.prisma.coach.update({
         where: { id },
         data,
       });
+      return this.withPrice(coach);
     } catch {
       throw new ConflictException('No se pudo actualizar el entrenador.');
     }
@@ -146,9 +154,10 @@ export class CoachesService {
     await this.findOne(id);
 
     try {
-      return await this.prisma.coach.delete({
+      const coach = await this.prisma.coach.delete({
         where: { id },
       });
+      return this.withPrice(coach);
     } catch {
       throw new ConflictException('No puedes eliminar un entrenador que está en uso.');
     }
@@ -157,7 +166,7 @@ export class CoachesService {
   async release(coachId: number) {
     await this.findOne(coachId);
 
-    return this.prisma.$transaction(async (tx) => {
+    const coach = await this.prisma.$transaction(async (tx) => {
       await tx.userClub.updateMany({
         where: { activeCoachId: coachId },
         data: { activeCoachId: null },
@@ -168,6 +177,7 @@ export class CoachesService {
         data: { ownerId: null, isFreeAgent: true },
       });
     });
+
+    return this.withPrice(coach);
   }
 }
-

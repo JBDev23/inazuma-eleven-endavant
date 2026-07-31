@@ -19,6 +19,11 @@ export default function GameSettingsTab() {
   const [settings, setSettings] = useState<GameSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentSession, setCurrentSession] = useState(1);
+  const [basePlayerPrice, setBasePlayerPrice] = useState(15);
+  const [playerPricePerLevel, setPlayerPricePerLevel] = useState(5);
+  const [baseCoachPrice, setBaseCoachPrice] = useState(30);
+  const [coachPricePerLevel, setCoachPricePerLevel] = useState(10);
+  const [playerPricePerPc, setPlayerPricePerPc] = useState(1);
   const [sessionForm, setSessionForm] = useState<SessionXpConfig>(emptySessionForm);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -32,6 +37,11 @@ export default function GameSettingsTab() {
       const data = await api.gameSettings.get();
       setSettings(data);
       setCurrentSession(data.currentSession);
+      setBasePlayerPrice(data.basePlayerPrice);
+      setPlayerPricePerLevel(data.playerPricePerLevel);
+      setBaseCoachPrice(data.baseCoachPrice);
+      setCoachPricePerLevel(data.coachPricePerLevel);
+      setPlayerPricePerPc(data.playerPricePerPc);
     } catch (error) {
       console.error(error);
       const message =
@@ -52,9 +62,16 @@ export default function GameSettingsTab() {
     setActionError(null);
     setActionSuccess(null);
     try {
-      const data = await api.gameSettings.update({ currentSession });
+      const data = await api.gameSettings.update({
+        currentSession,
+        basePlayerPrice,
+        playerPricePerLevel,
+        baseCoachPrice,
+        coachPricePerLevel,
+        playerPricePerPc,
+      });
       setSettings(data);
-      setActionSuccess("Sesión activa guardada");
+      setActionSuccess("Configuración global guardada");
     } catch (error) {
       setActionError(getApiErrorMessage(error, "Error al guardar."));
     } finally {
@@ -187,6 +204,93 @@ export default function GameSettingsTab() {
           className="flex w-full sm:w-auto items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-sm transition-colors"
         >
           <Save size={16} /> Guardar sesión activa
+        </button>
+      </section>
+
+      <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 space-y-5">
+        <h2 className="text-lg font-black uppercase tracking-wider text-white">
+          Precios mercado
+        </h2>
+        <p className="text-sm text-slate-500">
+          Jugador = base + (nivel × por nivel) + (PC aplicados × por PC). Entrenador = base +
+          (nivel × por nivel). Peaje y venta usan la mitad.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          <label className="space-y-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-500">
+              Base jugadores
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={basePlayerPrice}
+              onChange={(e) => setBasePlayerPrice(Number(e.target.value))}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-500">
+              Precio × nivel jug.
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={playerPricePerLevel}
+              onChange={(e) => setPlayerPricePerLevel(Number(e.target.value))}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-500">
+              Precio × PC
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={playerPricePerPc}
+              onChange={(e) => setPlayerPricePerPc(Number(e.target.value))}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-500">
+              Base entrenadores
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={baseCoachPrice}
+              onChange={(e) => setBaseCoachPrice(Number(e.target.value))}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-500">
+              Precio × nivel ent.
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={coachPricePerLevel}
+              onChange={(e) => setCoachPricePerLevel(Number(e.target.value))}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500"
+            />
+          </label>
+        </div>
+
+        <p className="text-xs text-slate-500 font-mono">
+          Ej. jugador Nv.5 + 3 PC →{" "}
+          {basePlayerPrice + 5 * playerPricePerLevel + 3 * playerPricePerPc} PP · entrenador Nv.5 →{" "}
+          {baseCoachPrice + 5 * coachPricePerLevel} PP
+        </p>
+
+        <button
+          onClick={() => void handleSaveGlobal()}
+          disabled={saving}
+          className="flex w-full sm:w-auto items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-sm transition-colors"
+        >
+          <Save size={16} /> Guardar precios y sesión
         </button>
       </section>
 

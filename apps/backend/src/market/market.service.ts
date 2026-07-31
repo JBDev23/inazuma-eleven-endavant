@@ -10,8 +10,6 @@ import {
 } from '../common/prisma-includes';
 import {
     formatClubWithRoster,
-    formatPlayerWithMoves,
-    formatPlayersWithMoves,
     enrichPlayerWithEquipment,
     enrichPlayersWithEquipment,
 } from '../common/format-player';
@@ -71,8 +69,14 @@ import {
   resolveClubFacilities,
   getShopItemPrice,
   getFreeMarketPlayerPrice,
+  computePlayerMarketPrice,
+  computeCoachMarketPrice,
+  getPlayerTollOrSellPrice,
+  getCoachSellPrice,
+  withComputedCoachPrices,
 } from '@inazuma/shared';
 import type { Prisma } from '@prisma/client';
+import { getEconomyPricing } from '../common/economy-pricing';
 
 function isFormationAvailableToClub(
     formation: { id: number; price: number },
@@ -138,18 +142,117 @@ export class MarketService {
     }
 
     async getUserClubs() {
-        const clubs = await this.prisma.userClub.findMany({
-            include: clubWithDetailsInclude,
-        });
-        return clubs.map((club) => formatClubWithRoster(club));
+        const [clubs, economy] = await Promise.all([
+            this.prisma.userClub.findMany({
+                include: clubWithDetailsInclude,
+            }),
+            getEconomyPricing(this.prisma),
+        ]);
+        return clubs.map((club) => formatClubWithRoster(club, economy));
     }
 
     async getUserClub(clubId: string) {
-        const club = await this.prisma.userClub.findUnique({
-            where: { id: clubId },
+        const [club, economy] = await Promise.all([
+            this.prisma.userClub.findUnique({
+                where: { id: clubId },
+                include: clubWithDetailsInclude,
+            }),
+            getEconomyPricing(this.prisma),
+        ]);
+        return club ? formatClubWithRoster(club, economy) : null;
+    }
+
+    async createUserClub(data: {
+        name: string;
+        password: string;
+        baseTeamSlug?: string | null;
+        shieldUrl?: string | null;
+        pp?: number;
+        pe?: number;
+        yens?: number;
+        pc?: number;
+    }) {
+        const name = data.name.trim();
+        if (!name) {
+            throw new BadRequestException('El nombre del club es obligatorio.');
+        }
+        if (!data.password?.trim()) {
+            throw new BadRequestException('La contraseña del club es obligatoria.');
+        }
+
+        const nameInUse = await this.prisma.userClub.findUnique({ where: { name } });
+        if (nameInUse) {
+            throw new ConflictException(`El nombre "${name}" ya está siendo utilizado por otro club.`);
+        }
+
+        if (data.baseTeamSlug) {
+            const team = await this.prisma.team.findUnique({ where: { slug: data.baseTeamSlug } });
+            if (!team) {
+                throw new BadRequestException(`No existe un equipo base con slug "${data.baseTeamSlug}".`);
+            }
+        }
+
+        const club = await this.prisma.userClub.create({
+            data: {
+                name,
+                password: data.password.trim(),
+                baseTeamSlug: data.baseTeamSlug || null,
+                ...(data.shieldUrl?.trim() ? { shieldUrl: data.shieldUrl.trim() } : {}),
+                ...(data.pp !== undefined ? { pp: data.pp } : {}),
+                ...(data.pe !== undefined ? { pe: data.pe } : {}),
+                ...(data.yens !== undefined ? { yens: data.yens } : {}),
+                ...(data.pc !== undefined ? { pc: data.pc } : {}),
+            },
             include: clubWithDetailsInclude,
         });
-        return club ? formatClubWithRoster(club) : null;
+
+        await this.ensureClubFacilities(club.id);
+
+        const economy = await getEconomyPricing(this.prisma);
+        const formatted = formatClubWithRoster(
+            await this.prisma.userClub.findUniqueOrThrow({
+                where: { id: club.id },
+                include: clubWithDetailsInclude,
+            }),
+            economy,
+        );
+        const { password: _password, ...clubWithoutPassword } = formatted;
+        return clubWithoutPassword;
+    }
+
+    async deleteUserClub(id: string) {
+        const existingClub = await this.prisma.userClub.findUnique({ where: { id } });
+        if (!existingClub) {
+            throw new NotFoundException(`El club con ID ${id} no existe.`);
+        }
+
+        await this.prisma.$transaction(async (tx) => {
+            // Quitar entrenador activo antes de liberar coaches
+            await tx.userClub.update({
+                where: { id },
+                data: {
+                    activeCoachId: null,
+                    activeFormation11Id: null,
+                    activeFormation4Id: null,
+                },
+            });
+
+            await tx.player.updateMany({
+                where: { ownerId: id },
+                data: { ownerId: null, ...rosterResetData },
+            });
+
+            await tx.coach.updateMany({
+                where: { ownerId: id },
+                data: { ownerId: null, isFreeAgent: true },
+            });
+
+            await tx.unlockedNode.deleteMany({ where: { userClubId: id } });
+
+            await tx.userClub.delete({ where: { id } });
+        });
+
+        return { success: true as const };
     }
 
     async calculateMapState(clubId: string, teamSlug: string, sourceTeamSlug?: string) {
@@ -172,10 +275,13 @@ export class MarketService {
 
 
         // 3. Consultamos el estado ACTUAL de esos jugadores en la Base de Datos
-        const playersDB = await this.prisma.player.findMany({
-            where: { nickname: { in: playerNicknamesEnMapa } },
-            include: playerWithMovesInclude,
-        });
+        const [playersDB, economy] = await Promise.all([
+            this.prisma.player.findMany({
+                where: { nickname: { in: playerNicknamesEnMapa } },
+                include: playerWithMovesInclude,
+            }),
+            getEconomyPricing(this.prisma),
+        ]);
         const playersByNickname = new Map(
             playersDB.filter(p => p.nickname).map(p => [p.nickname!, p]),
         );
@@ -187,7 +293,7 @@ export class MarketService {
                 if (dbPlayer) {
                     node.data.player = {
                         ...node.data.player,
-                        ...enrichPlayerWithEquipment(dbPlayer),
+                        ...enrichPlayerWithEquipment(dbPlayer, economy),
                     };
                 }
             }
@@ -396,7 +502,8 @@ export class MarketService {
                     data: { ownerId: clubId, ...rosterResetData },
                     include: playerWithMovesInclude,
                 });
-                return formatPlayerWithMoves(bought);
+                const economy = await getEconomyPricing(this.prisma);
+                return enrichPlayerWithEquipment(bought, economy);
             }
 
             case 'sell': {
@@ -414,7 +521,8 @@ export class MarketService {
                     where: { id: player.id },
                     include: playerWithMovesInclude,
                 });
-                return enrichPlayerWithEquipment(sold);
+                const economy = await getEconomyPricing(this.prisma);
+                return enrichPlayerWithEquipment(sold, economy);
             }
 
             case 'make-rival-toll': {
@@ -443,7 +551,8 @@ export class MarketService {
                     data: { ownerId: rivalClub.id, ...rosterResetData },
                     include: playerWithMovesInclude,
                 });
-                return formatPlayerWithMoves(rivalOwned);
+                const economy = await getEconomyPricing(this.prisma);
+                return enrichPlayerWithEquipment(rivalOwned, economy);
             }
         }
     }
@@ -463,13 +572,16 @@ export class MarketService {
 
             const playerId = player.id;
             const facilities = resolveClubFacilities(formatClubFacilities(club.facilities));
+            const economy = await getEconomyPricing(tx);
 
-            // 2. Calculamos el precio (El peaje es la mitad del precio base)
-            const buyPrice = getFreeMarketPlayerPrice(player.price, facilities);
-            const price = action === 'buy' ? buyPrice : Math.floor(player.price / 2);
+            // 2. Precio dinámico (nivel + PC); peaje/venta = mitad; fichaje aplica dto. tienda
+            const marketPrice = computePlayerMarketPrice(player, economy);
+            const buyPrice = getFreeMarketPlayerPrice(marketPrice, facilities);
+            const tollOrSellPrice = getPlayerTollOrSellPrice(player, economy);
+            const price = action === 'buy' ? buyPrice : tollOrSellPrice;
 
             // 3. Verificamos el saldo
-            if (club.pp < price) {
+            if (action !== 'sell' && club.pp < price) {
                 throw new BadRequestException(`No tienes suficientes PP. Necesitas ${price}.`);
             }
 
@@ -521,7 +633,7 @@ export class MarketService {
                 // Restamos PP al comprador
                 await tx.userClub.update({
                     where: { id: clubId },
-                    data: { pp: { decrement: Math.floor(player.price / 2) } }
+                    data: { pp: { decrement: tollOrSellPrice } }
                 });
 
                 // 🎯 Opcional: ¿El dinero del peaje se lo queda el dueño del jugador?
@@ -538,7 +650,7 @@ export class MarketService {
                     data: { userClubId: clubId, playerId: playerId }
                 });
 
-                return { success: true, newBalance: club.pp - Math.floor(player.price / 2) };
+                return { success: true, newBalance: club.pp - tollOrSellPrice };
             }
 
             else if (action === 'sell') {
@@ -547,8 +659,8 @@ export class MarketService {
                     throw new BadRequestException('No puedes vender un jugador que no es tuyo.');
                 }
 
-                // 2. Calculamos cuánto le pagamos (Ej: 50% de su valor)
-                const sellPrice = Math.floor(player.price / 2);
+                // 2. Calculamos cuánto le pagamos (50% del valor dinámico)
+                const sellPrice = tollOrSellPrice;
 
                 // 3. Devolvemos objetos equipados al inventario del club
                 await returnEquippedItemsToClub(tx, playerId, clubId);
@@ -583,30 +695,41 @@ export class MarketService {
     }
 
     async getFreeAgents() {
-        const players = await this.prisma.player.findMany({
-            where: {
-                isFreeAgent: true,
-                ownerId: null,
-            },
-            include: playerWithMovesInclude,
-            orderBy: {
-                price: 'desc',
-            },
-        });
-        return enrichPlayersWithEquipment(players);
+        const [players, economy] = await Promise.all([
+            this.prisma.player.findMany({
+                where: {
+                    isFreeAgent: true,
+                    ownerId: null,
+                },
+                include: playerWithMovesInclude,
+                orderBy: {
+                    level: 'desc',
+                },
+            }),
+            getEconomyPricing(this.prisma),
+        ]);
+        return enrichPlayersWithEquipment(players, economy).sort(
+            (a, b) => (b.price ?? 0) - (a.price ?? 0),
+        );
     }
 
     async getFreeCoaches() {
-        return this.prisma.coach.findMany({
-            where: {
-                isFreeAgent: true,
-                ownerId: null,
-            },
-            include: coachWithFormationsInclude,
-            orderBy: {
-                price: 'desc',
-            },
-        });
+        const [coaches, economy] = await Promise.all([
+            this.prisma.coach.findMany({
+                where: {
+                    isFreeAgent: true,
+                    ownerId: null,
+                },
+                include: coachWithFormationsInclude,
+                orderBy: {
+                    level: 'desc',
+                },
+            }),
+            getEconomyPricing(this.prisma),
+        ]);
+        return withComputedCoachPrices(coaches, economy).sort(
+            (a, b) => (b.price ?? 0) - (a.price ?? 0),
+        );
     }
 
     async buyCoach(clubId: string, coachId: number) {
@@ -621,13 +744,16 @@ export class MarketService {
                 throw new BadRequestException('Este entrenador ya ha sido fichado por otro club.');
             }
 
-            if (club.pp < coach.price) {
-                throw new BadRequestException(`No tienes suficientes PP. Necesitas ${coach.price}.`);
+            const economy = await getEconomyPricing(tx);
+            const price = computeCoachMarketPrice(coach, economy);
+
+            if (club.pp < price) {
+                throw new BadRequestException(`No tienes suficientes PP. Necesitas ${price}.`);
             }
 
             await tx.userClub.update({
                 where: { id: clubId },
-                data: { pp: { decrement: coach.price } },
+                data: { pp: { decrement: price } },
             });
 
             await tx.coach.update({
@@ -635,7 +761,7 @@ export class MarketService {
                 data: { ownerId: clubId, isFreeAgent: false },
             });
 
-            return { success: true, newBalance: club.pp - coach.price };
+            return { success: true, newBalance: club.pp - price };
         });
     }
 
@@ -661,7 +787,8 @@ export class MarketService {
                 );
             }
 
-            const sellPrice = Math.floor(coach.price / 2);
+            const economy = await getEconomyPricing(tx);
+            const sellPrice = getCoachSellPrice(coach, economy);
 
             await tx.userClub.update({
                 where: { id: clubId },
@@ -978,11 +1105,19 @@ export class MarketService {
                 include: clubWithDetailsInclude,
             });
 
-            return formatClubWithRoster(updatedClub);
+            const economy = await getEconomyPricing(tx);
+            return formatClubWithRoster(updatedClub, economy);
         });
     }
 
-    async updateUserClub(id: string, updateData: Partial<UserClub>) {
+    async updateUserClub(id: string, updateData: {
+        name?: string;
+        password?: string;
+        pp?: number;
+        baseTeamSlug?: string | null;
+        shieldUrl?: string | null;
+        activeCoachId?: number | null;
+    }) {
         const existingClub = await this.prisma.userClub.findUnique({
           where: { id },
         });
@@ -1003,18 +1138,29 @@ export class MarketService {
           }
         }
 
-        const data: {
-          name?: string;
-          pp?: number;
-          baseTeamSlug?: string;
-          shieldUrl?: string;
-          activeCoachId?: number | null;
-        } = {
-          name: updateData.name,
-          pp: updateData.pp,
-          baseTeamSlug: updateData.baseTeamSlug,
-          shieldUrl: updateData.shieldUrl,
-        };
+        const data: Prisma.UserClubUncheckedUpdateInput = {};
+
+        if (updateData.name !== undefined) data.name = updateData.name;
+        if (updateData.pp !== undefined) data.pp = updateData.pp;
+        if (updateData.baseTeamSlug !== undefined) data.baseTeamSlug = updateData.baseTeamSlug;
+        if (updateData.shieldUrl !== undefined && updateData.shieldUrl !== null) {
+          data.shieldUrl = updateData.shieldUrl;
+        }
+
+        if (updateData.password !== undefined) {
+          const password = updateData.password.trim();
+          if (!password) {
+            throw new BadRequestException('La contraseña del club no puede estar vacía.');
+          }
+          data.password = password;
+        }
+
+        if (updateData.baseTeamSlug) {
+          const team = await this.prisma.team.findUnique({ where: { slug: updateData.baseTeamSlug } });
+          if (!team) {
+            throw new BadRequestException(`No existe un equipo base con slug "${updateData.baseTeamSlug}".`);
+          }
+        }
 
         if (updateData.activeCoachId !== undefined) {
           if (updateData.activeCoachId === null) {
@@ -1038,7 +1184,8 @@ export class MarketService {
           include: clubWithDetailsInclude,
         });
 
-        const formattedClub = formatClubWithRoster(updatedClub);
+        const economy = await getEconomyPricing(this.prisma);
+        const formattedClub = formatClubWithRoster(updatedClub, economy);
         const { password: _password, ...clubWithoutPassword } = formattedClub;
 
         return clubWithoutPassword;
@@ -1335,12 +1482,19 @@ export class MarketService {
                 data: { pc: newPcBalance },
             });
 
+            const economy = await getEconomyPricing(tx);
+            const marketPrice = computePlayerMarketPrice(
+                { level: freshPlayer.level, statBonuses: newBonuses },
+                economy,
+            );
+
             return {
                 success: true as const,
                 newPcBalance,
                 statBonuses: newBonuses,
                 statKey,
                 newStatValue: preview.newBonus,
+                marketPrice,
             };
         });
     }

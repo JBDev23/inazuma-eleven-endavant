@@ -164,7 +164,7 @@ export interface UserClub {
   id: string;
   name: string;
   password: string;
-  baseTeamSlug: string;
+  baseTeamSlug: string | null;
   shieldUrl: string;
   pp: number;
   pe: number;
@@ -183,6 +183,21 @@ export interface UserClub {
   consumables?: ClubConsumableWithDetails[];
   facilities?: import('./sports-city').ClubFacilityRecord[];
 }
+
+export interface CreateUserClubDto {
+  name: string;
+  password: string;
+  baseTeamSlug?: string | null;
+  shieldUrl?: string | null;
+  pp?: number;
+  pe?: number;
+  yens?: number;
+  pc?: number;
+}
+
+export type UpdateUserClubDto = Partial<
+  Pick<UserClub, 'name' | 'password' | 'baseTeamSlug' | 'shieldUrl' | 'pp' | 'activeCoachId'>
+>;
 
 // ==========================================
 // TIPOS BASE DE LAS SUPERTÉCNICAS
@@ -357,6 +372,8 @@ export interface SpendPcResult {
   statBonuses: Partial<Record<StatKey, number>>;
   statKey: StatKey;
   newStatValue: number;
+  /** Precio de mercado dinámico tras aplicar el PC */
+  marketPrice: number;
 }
 
 export type { PeAllocation, PePlayerPreview, PeRedemptionPreview } from './pe-redeem';

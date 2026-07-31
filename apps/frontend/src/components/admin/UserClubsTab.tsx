@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { AlertTriangle, Search, RefreshCw, Edit2, Coins, LayoutGrid } from "lucide-react";
+import { AlertTriangle, Search, RefreshCw, Edit2, Coins, LayoutGrid, Plus, Trash2 } from "lucide-react";
 import { api, getApiErrorMessage } from "@/services/api";
 import type { UserClub, Team, AddTransactionDto } from "@inazuma/shared";
 import { pickClubResources } from "@inazuma/shared";
 import AdminClubModal from "./AdminClubModal";
-import AdminResourceModal from "./AdminResourceModal"; // 🎯 Importamos el nuevo modal
+import AdminResourceModal from "./AdminResourceModal";
 import AdminFormationAssignmentModal from "./AdminFormationAssignmentModal";
 import { ClubResourcesDisplay } from "@/components/economy/ClubResourcesDisplay";
 import { ClubShield } from "@/components/club/ClubShield";
@@ -21,8 +21,7 @@ export default function UserClubsTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   
-  // Estados para los modales
-  const [editingClub, setEditingClub] = useState<UserClub | null>(null);
+  const [editingClub, setEditingClub] = useState<UserClub | Partial<UserClub> | null>(null);
   const [resourceClub, setResourceClub] = useState<UserClub | null>(null);
   const [formationsClub, setFormationsClub] = useState<UserClub | null>(null);
 
@@ -55,23 +54,55 @@ export default function UserClubsTab() {
     return clubs.filter((c) => c.name.toLowerCase().includes(lowerSearch));
   }, [clubs, searchTerm]);
 
-  // Guardar configuración general del club
-  const handleSaveClub = async (clubId: string, updatedData: Partial<UserClub>) => {
+  const handleSaveClub = async (clubId: string | null, updatedData: Partial<UserClub> & { password?: string }) => {
     try {
-      await api.market.updateUserClub(clubId, updatedData);
+      if (clubId) {
+        await api.market.updateUserClub(clubId, updatedData);
+      } else {
+        if (!updatedData.name || !updatedData.password) {
+          throw new Error("Nombre y contraseña son obligatorios.");
+        }
+        await api.market.createUserClub({
+          name: updatedData.name,
+          password: updatedData.password,
+          baseTeamSlug: updatedData.baseTeamSlug,
+          shieldUrl: updatedData.shieldUrl,
+          pp: updatedData.pp,
+        });
+      }
       setEditingClub(null);
+      setActionError(null);
       loadData();
     } catch (error) {
       setActionError(getApiErrorMessage(error, "Error al guardar los cambios."));
     }
   };
 
-  // 🎯 Nuevo handler para inyectar recursos
+  const handleDeleteClub = async (club: UserClub) => {
+    const rosterCount = club.roster?.length ?? 0;
+    const warning =
+      rosterCount > 0
+        ? ` El club tiene ${rosterCount} jugador(es); se liberarán a agentes libres.`
+        : "";
+    const ok = window.confirm(
+      `¿Eliminar el club "${club.name}"?${warning} Esta acción no se puede deshacer.`,
+    );
+    if (!ok) return;
+
+    try {
+      await api.market.deleteUserClub(club.id);
+      setActionError(null);
+      loadData();
+    } catch (error) {
+      setActionError(getApiErrorMessage(error, "Error al eliminar el club."));
+    }
+  };
+
   const handleSaveResources = async (clubId: string, transactionData: AddTransactionDto) => {
     try {
       await api.market.addTransaction(clubId, transactionData); 
       setResourceClub(null);
-      loadData(); // Recargamos para ver los nuevos saldos reflejados en la tabla
+      loadData();
     } catch (error) {
       setActionError(getApiErrorMessage(error, "Error al procesar la transacción."));
     }
@@ -96,6 +127,12 @@ export default function UserClubsTab() {
           className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 py-3 rounded-xl font-bold transition-colors border border-slate-700"
         >
           <RefreshCw size={16} /> Recargar
+        </button>
+        <button
+          onClick={() => setEditingClub({})}
+          className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-400 text-slate-950 px-6 py-3 rounded-xl font-black transition-colors"
+        >
+          <Plus size={16} /> Nuevo club
         </button>
       </div>
 
@@ -129,7 +166,6 @@ export default function UserClubsTab() {
               {filteredClubs.map((club) => (
                 <tr key={club.id} className="hover:bg-slate-800/50 transition-colors group">
                   
-                  {/* NOMBRE DEL CLUB */}
                   <td className="p-3 sm:p-4">
                     <div className="flex items-center gap-2 sm:gap-3 min-w-[160px]">
                       <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-950 border border-slate-800 rounded-full flex items-center justify-center shrink-0 overflow-hidden p-1">
@@ -182,7 +218,6 @@ export default function UserClubsTab() {
                         <LayoutGrid size={16} />
                       </button>
 
-                      {/* Botón de Economía */}
                       <button 
                         onClick={() => setResourceClub(club)}
                         className="p-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 rounded-lg transition-colors shadow-[0_0_10px_rgba(16,185,129,0.3)]"
@@ -191,13 +226,20 @@ export default function UserClubsTab() {
                         <Coins size={16} />
                       </button>
                       
-                      {/* Botón de Edición General */}
                       <button 
                         onClick={() => setEditingClub(club)}
                         className="p-2 bg-yellow-600 hover:bg-yellow-500 text-slate-950 rounded-lg transition-colors shadow-[0_0_10px_rgba(234,179,8,0.3)]"
                         title="Editar Club"
                       >
                         <Edit2 size={16} />
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteClub(club)}
+                        className="p-2 bg-red-700 hover:bg-red-600 text-white rounded-lg transition-colors"
+                        title="Eliminar Club"
+                      >
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </td>
@@ -229,7 +271,6 @@ export default function UserClubsTab() {
         />
       )}
 
-      {/* 🎯 Instanciamos nuestro nuevo Modal de Recursos */}
       {resourceClub && (
         <AdminResourceModal
           club={resourceClub}

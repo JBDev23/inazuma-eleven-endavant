@@ -1,4 +1,6 @@
 import { addExperience } from './xp.utils';
+import type { EconomyPricingSettings } from './entity-pricing';
+import { DEFAULT_ECONOMY_PRICING } from './entity-pricing';
 
 export type MatchFormatKey = '11v11' | '4v4';
 
@@ -14,10 +16,12 @@ export interface SessionXpConfig {
   coachXpPerYe: number;
 }
 
-export interface GameSettings {
+export interface GameSettings extends EconomyPricingSettings {
   currentSession: number;
   sessionConfigs: SessionXpConfig[];
 }
+
+export { DEFAULT_ECONOMY_PRICING };
 
 export interface PlayerMatchParticipation {
   playerId: number;

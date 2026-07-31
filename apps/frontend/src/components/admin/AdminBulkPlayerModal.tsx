@@ -6,7 +6,6 @@ import type { Player, UserClub } from "@inazuma/shared";
 export interface BulkPlayerUpdatePayload {
   level?: number;
   experience?: number;
-  price?: number;
   isFreeAgent?: boolean;
   ownerId?: string | null;
 }
@@ -21,7 +20,6 @@ interface AdminBulkPlayerModalProps {
 interface FieldToggle {
   level: boolean;
   experience: boolean;
-  price: boolean;
   ownership: boolean;
 }
 
@@ -34,13 +32,11 @@ export default function AdminBulkPlayerModal({
   const [applyFields, setApplyFields] = useState<FieldToggle>({
     level: false,
     experience: false,
-    price: false,
     ownership: false,
   });
 
   const [level, setLevel] = useState(1);
   const [experience, setExperience] = useState(0);
-  const [price, setPrice] = useState(100);
   const [isFreeAgent, setIsFreeAgent] = useState(false);
   const [ownerId, setOwnerId] = useState("");
 
@@ -63,7 +59,6 @@ export default function AdminBulkPlayerModal({
 
     if (applyFields.level) payload.level = level;
     if (applyFields.experience) payload.experience = experience;
-    if (applyFields.price) payload.price = price;
     if (applyFields.ownership) {
       payload.isFreeAgent = isFreeAgent;
       payload.ownerId = isFreeAgent ? null : ownerId || null;
@@ -157,28 +152,6 @@ export default function AdminBulkPlayerModal({
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white font-mono focus:border-blue-500 focus:outline-hidden disabled:opacity-40"
               />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={applyFields.price}
-                onChange={() => toggleField("price")}
-                className="w-4 h-4 accent-blue-600"
-              />
-              <span className="text-xs font-bold text-slate-400 uppercase">
-                Precio mercado (🪙)
-              </span>
-            </label>
-            <input
-              type="number"
-              min="0"
-              disabled={!applyFields.price}
-              value={price}
-              onChange={(e) => setPrice(parseInt(e.target.value) || 0)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-yellow-500 font-black focus:border-yellow-500 focus:outline-hidden disabled:opacity-40"
-            />
           </div>
 
           <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">

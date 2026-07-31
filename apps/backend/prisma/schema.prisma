@@ -410,6 +410,13 @@ model PlayerMove {
 model GameSettings {
   id              Int @id @default(1)
   currentSession  Int @default(1)
+
+  /** Economía dinámica de jugadores / entrenadores */
+  basePlayerPrice     Int @default(15)
+  playerPricePerLevel Int @default(5)
+  baseCoachPrice      Int @default(30)
+  coachPricePerLevel  Int @default(10)
+  playerPricePerPc    Int @default(1)
 }
 
 model SessionXpConfig {

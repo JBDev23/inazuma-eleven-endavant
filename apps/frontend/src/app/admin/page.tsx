@@ -10,18 +10,28 @@ import {
   TrendingUp,
   Building2,
   LayoutGrid,
+  Shield,
   type LucideIcon,
 } from "lucide-react";
 
 import PlayersTab from "@/components/admin/PlayersTab";
 import UserClubsTab from "@/components/admin/UserClubsTab";
+import LoreTeamsTab from "@/components/admin/LoreTeamsTab";
 import MovesTab from "@/components/admin/MovesTab";
 import CoachesTab from "@/components/admin/CoachesTab";
 import FormationsTab from "@/components/admin/FormationsTab";
 import GameSettingsTab from "@/components/admin/GameSettingsTab";
 import SportsCitiesTab from "@/components/admin/SportsCitiesTab";
 
-type AdminTabId = "players" | "clubs" | "moves" | "coaches" | "formations" | "xp" | "sports-city";
+type AdminTabId =
+  | "players"
+  | "clubs"
+  | "lore-teams"
+  | "moves"
+  | "coaches"
+  | "formations"
+  | "xp"
+  | "sports-city";
 
 type AdminTab = {
   id: AdminTabId;
@@ -45,6 +55,13 @@ const ADMIN_TABS: AdminTab[] = [
     shortLabel: "Clubes",
     icon: Trophy,
     activeClass: "bg-slate-900 text-yellow-500 border-t-2 border-yellow-500",
+  },
+  {
+    id: "lore-teams",
+    label: "Equipos Lore",
+    shortLabel: "Lore",
+    icon: Shield,
+    activeClass: "bg-slate-900 text-amber-400 border-t-2 border-amber-400",
   },
   {
     id: "moves",
@@ -133,6 +150,7 @@ export default function AdminDashboardPage() {
 
         {activeTab === "players" && <PlayersTab />}
         {activeTab === "clubs" && <UserClubsTab />}
+        {activeTab === "lore-teams" && <LoreTeamsTab />}
         {activeTab === "moves" && <MovesTab />}
         {activeTab === "coaches" && <CoachesTab />}
         {activeTab === "formations" && <FormationsTab />}

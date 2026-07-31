@@ -17,4 +17,5 @@ export * from './sports-city';
 export * from './match-facility-bonuses';
 export * from './burning-phase';
 export * from './facility-economy';
+export * from './entity-pricing';
 export * from './match-engine';

@@ -38,6 +38,11 @@ export class GameSettingsService {
         data: {
           id: 1,
           currentSession: 1,
+          basePlayerPrice: 15,
+          playerPricePerLevel: 5,
+          baseCoachPrice: 30,
+          coachPricePerLevel: 10,
+          playerPricePerPc: 1,
         },
       });
     }
@@ -90,6 +95,11 @@ export class GameSettingsService {
 
     return {
       currentSession: settings.currentSession,
+      basePlayerPrice: settings.basePlayerPrice,
+      playerPricePerLevel: settings.playerPricePerLevel,
+      baseCoachPrice: settings.baseCoachPrice,
+      coachPricePerLevel: settings.coachPricePerLevel,
+      playerPricePerPc: settings.playerPricePerPc,
       sessionConfigs: sessionConfigs.map((c) => this.mapSessionConfig(c)),
     };
   }
@@ -101,6 +111,15 @@ export class GameSettingsService {
       where: { id: 1 },
       data: {
         ...(dto.currentSession !== undefined && { currentSession: dto.currentSession }),
+        ...(dto.basePlayerPrice !== undefined && { basePlayerPrice: dto.basePlayerPrice }),
+        ...(dto.playerPricePerLevel !== undefined && {
+          playerPricePerLevel: dto.playerPricePerLevel,
+        }),
+        ...(dto.baseCoachPrice !== undefined && { baseCoachPrice: dto.baseCoachPrice }),
+        ...(dto.coachPricePerLevel !== undefined && {
+          coachPricePerLevel: dto.coachPricePerLevel,
+        }),
+        ...(dto.playerPricePerPc !== undefined && { playerPricePerPc: dto.playerPricePerPc }),
       },
     });
 

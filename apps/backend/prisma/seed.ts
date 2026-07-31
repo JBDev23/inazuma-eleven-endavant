@@ -82,6 +82,25 @@ const TEAM_SEEDS: TeamSeed[] = [
   { name: 'Prominence', type: 'CENTRAL', slug: 'prominence' },
   { name: 'Diamond Dust', type: 'CENTRAL', slug: 'diamond-dust' },
   { name: 'Dark Emperors', type: 'CENTRAL', slug: 'dark-emperors' },
+  // Temporada 3 — CLUB
+  { name: 'Inazuma Japan', type: 'CLUB', slug: 'inazuma-japan' },
+  // Temporada 3 — CENTRAL
+  { name: 'Big Waves', type: 'CENTRAL', slug: 'big-waves' },
+  { name: 'Desert Lion', type: 'CENTRAL', slug: 'desert-lion' },
+  { name: 'Fire Dragon', type: 'CENTRAL', slug: 'fire-dragon' },
+  { name: 'Knights of Queen', type: 'CENTRAL', slug: 'knights-of-queen' },
+  { name: 'The Empire', type: 'CENTRAL', slug: 'the-empire' },
+  { name: 'Unicorn', type: 'CENTRAL', slug: 'unicorn' },
+  { name: 'Orpheus', type: 'CENTRAL', slug: 'orpheus' },
+  { name: 'Os Reis', type: 'CENTRAL', slug: 'os-reis' },
+  { name: 'Team Garshield', type: 'CENTRAL', slug: 'team-garshield' },
+  { name: 'Red Matador', type: 'CENTRAL', slug: 'red-matador' },
+  { name: 'Team K', type: 'CENTRAL', slug: 'team-k' },
+  { name: 'The Little Gigant', type: 'CENTRAL', slug: 'little-gigant' },
+  { name: 'Rose Griffon', type: 'CENTRAL', slug: 'rose-griffon' },
+  { name: 'The Great Horn', type: 'CENTRAL', slug: 'the-great-horn' },
+  { name: 'Makai Gundan Z', type: 'CENTRAL', slug: 'makai-gundan-z' },
+  { name: 'Tenkuu no Shito', type: 'CENTRAL', slug: 'tenkuu-no-shito' },
 ];
 
 function loadPlayersFromJson(): PlayerSeed[] {
@@ -116,10 +135,21 @@ type MoveSeed = {
   'HEX ID': string;
 };
 
-function loadMovesFromJson(): MoveSeed[] {
-  const movesFilePath = join(__dirname, 'moves.json');
+function loadMovesFromJson(filename: string): MoveSeed[] {
+  const movesFilePath = join(__dirname, filename);
   const fileContent = readFileSync(movesFilePath, 'utf-8');
   return JSON.parse(fileContent) as MoveSeed[];
+}
+
+/** Une moves.json (T1/T2) + movesIe3.json; si hay nombre repetido, prevalece el primero. */
+function loadAllMovesFromJson(): MoveSeed[] {
+  const byName = new Map<string, MoveSeed>();
+  for (const move of [...loadMovesFromJson('moves.json'), ...loadMovesFromJson('movesIe3.json')]) {
+    if (!byName.has(move['Move Name'])) {
+      byName.set(move['Move Name'], move);
+    }
+  }
+  return [...byName.values()];
 }
 
 type PlayerMoveEntry = {
@@ -129,10 +159,26 @@ type PlayerMoveEntry = {
 
 type PlayerMovesSeed = Record<string, PlayerMoveEntry[]>;
 
-function loadPlayerMovesFromJson(): PlayerMovesSeed {
-  const filePath = join(__dirname, 'movimientos_combinados.json');
+function loadPlayerMovesFromJson(filename: string): PlayerMovesSeed {
+  const filePath = join(__dirname, filename);
   const fileContent = readFileSync(filePath, 'utf-8');
   return JSON.parse(fileContent) as PlayerMovesSeed;
+}
+
+/** Alias de nombres en repertorios → nombre canónico del manual. */
+const MOVE_NAME_ALIASES: Record<string, string> = {
+  'Emperor Penguin No. 3': 'Emperor Penguin No.3',
+  Megalodon: 'Mega Lodon',
+  'Mirage Shot': 'Mirage Shoot',
+  'Samba Strike': 'Strike Samba',
+  'Barrier Reef': 'Great Barrier Reef',
+  'Heavenly Drive': 'Heaven Drive',
+  'Majin The Hand(W)': 'Majin The Hand(Wood)',
+  'Fire Blizzard(A)': 'Fire Blizzard(Wind)',
+};
+
+function resolveMoveName(name: string): string {
+  return MOVE_NAME_ALIASES[name] ?? name;
 }
 
 type FormationSeed = {
@@ -150,7 +196,10 @@ function loadFormationsFromJson(): FormationSeed[] {
 }
 
 function parseFoulRate(rate: string): number {
-  return parseFloat(rate.replace('%', '')) / 100.0;
+  const trimmed = rate.trim();
+  if (!trimmed) return 0;
+  const parsed = parseFloat(trimmed.replace('%', ''));
+  return Number.isFinite(parsed) ? parsed / 100.0 : 0;
 }
 
 function mapMoveType(type: string): MoveType {
@@ -171,13 +220,15 @@ function parseEvolutionType(evolutionType: string): {
   evolutionPath: EvolutionPath;
   evolutionSpeed: EvolutionSpeed;
 } {
-  const match = evolutionType.match(/^(Shin|L)\s+\((Fast|Medium|Slow)\)$/);
+  // Shin / Version → 3 niveles (SHIN); L / Grade → 5 niveles (L_G)
+  const match = evolutionType.match(/^(Shin|Version|L|Grade)\s+\((Fast|Medium|Slow)\)$/);
   if (!match) {
     throw new Error(`Evolution Type desconocido: "${evolutionType}"`);
   }
 
   const [, pathRaw, speedRaw] = match;
-  const evolutionPath: EvolutionPath = pathRaw === 'Shin' ? 'SHIN' : 'L_G';
+  const evolutionPath: EvolutionPath =
+    pathRaw === 'Shin' || pathRaw === 'Version' ? 'SHIN' : 'L_G';
   const speedMap: Record<string, EvolutionSpeed> = {
     Fast: 'FAST',
     Medium: 'MEDIUM',
@@ -216,7 +267,7 @@ async function main() {
     data: TEAM_SEEDS,
     skipDuplicates: true,
   });
-  console.log(`⚽ ${TEAM_SEEDS.length} equipos asegurados (T1 + T2).`);
+  console.log(`⚽ ${TEAM_SEEDS.length} equipos asegurados (T1 + T2 + T3).`);
 
   await prisma.userClub.createMany({
     data: [
@@ -258,8 +309,8 @@ async function main() {
   // ==========================================
   // 2. INSERCIÓN DE TÉCNICAS DESDE JSON
   // ==========================================
-  const moves = loadMovesFromJson();
-  console.log(`\n⚡ Cargando ${moves.length} técnicas desde JSON...`);
+  const moves = loadAllMovesFromJson();
+  console.log(`\n⚡ Cargando ${moves.length} técnicas desde moves.json + movesIe3.json...`);
 
   await prisma.move.createMany({
     data: moves.map((moveData) => {
@@ -460,22 +511,58 @@ async function main() {
   // ==========================================
   // 5. REPERTORIO DE TÉCNICAS POR JUGADOR
   // ==========================================
-  const playerMovesData = loadPlayerMovesFromJson();
+  const playerMoveSources: { label: string; seasons: number[]; data: PlayerMovesSeed }[] = [
+    {
+      label: 'movimientos_combinados.json (T1/T2)',
+      seasons: [1, 2],
+      data: loadPlayerMovesFromJson('movimientos_combinados.json'),
+    },
+    {
+      label: 'movimientos_ie3.json (T3)',
+      seasons: [3],
+      data: loadPlayerMovesFromJson('movimientos_ie3.json'),
+    },
+  ];
+
   const moveIdByName = new Map(
     (await prisma.move.findMany({ select: { id: true, name: true } })).map(
       (move) => [move.name, move.id],
     ),
   );
-  // Varios jugadores pueden compartir nickname (p. ej. Raimon / Dark Emperors)
-  const playerIdsByNickname = new Map<string, number[]>();
-  for (const player of await prisma.player.findMany({
-    select: { id: true, nickname: true },
-  })) {
-    if (!player.nickname) continue;
-    const list = playerIdsByNickname.get(player.nickname) ?? [];
-    list.push(player.id);
-    playerIdsByNickname.set(player.nickname, list);
-  }
+
+  // nickname → jugadores (varios pueden compartir nickname entre equipos/temporadas)
+  const playersForMoves = await prisma.player.findMany({
+    select: {
+      id: true,
+      nickname: true,
+      season: true,
+      team: { select: { slug: true } },
+    },
+  });
+
+  const resolveMoveId = (rawName: string): number | undefined => {
+    const name = resolveMoveName(rawName);
+    return moveIdByName.get(name) ?? moveIdByName.get(rawName);
+  };
+
+  const pickPlayersForNickname = (
+    nickname: string,
+    seasons: number[],
+  ): { id: number }[] => {
+    const matches = playersForMoves.filter(
+      (player) =>
+        player.nickname === nickname && seasons.includes(player.season),
+    );
+    if (matches.length <= 1) return matches;
+
+    // En T3, nicknames compartidos (Mark/Kevin/Kane) → preferir Inazuma Japan
+    if (seasons.includes(3)) {
+      const japan = matches.filter((player) => player.team.slug === 'inazuma-japan');
+      if (japan.length) return japan;
+    }
+
+    return matches;
+  };
 
   const missingSkillNames = new Set<string>();
   const playerMoveRecords: {
@@ -483,27 +570,35 @@ async function main() {
     moveId: number;
     unlockLevel: number;
   }[] = [];
+  let totalPlayerKeys = 0;
 
-  for (const [nickname, entries] of Object.entries(playerMovesData)) {
-    const playerIds = playerIdsByNickname.get(nickname);
-    if (!playerIds?.length) {
-      console.warn(`⚠️ Jugador no encontrado para repertorio: "${nickname}"`);
-      continue;
-    }
+  for (const source of playerMoveSources) {
+    totalPlayerKeys += Object.keys(source.data).length;
+    console.log(`\n📘 Asignando repertorio desde ${source.label}...`);
 
-    for (const { move, level } of entries) {
-      const moveId = moveIdByName.get(move);
-      if (!moveId) {
-        missingSkillNames.add(move);
+    for (const [nickname, entries] of Object.entries(source.data)) {
+      const playerIds = pickPlayersForNickname(nickname, source.seasons);
+      if (!playerIds.length) {
+        console.warn(
+          `⚠️ Jugador no encontrado para repertorio (${source.label}): "${nickname}"`,
+        );
         continue;
       }
 
-      for (const playerId of playerIds) {
-        playerMoveRecords.push({
-          playerId,
-          moveId,
-          unlockLevel: level,
-        });
+      for (const { move, level } of entries) {
+        const moveId = resolveMoveId(move);
+        if (!moveId) {
+          missingSkillNames.add(resolveMoveName(move));
+          continue;
+        }
+
+        for (const player of playerIds) {
+          playerMoveRecords.push({
+            playerId: player.id,
+            moveId,
+            unlockLevel: level,
+          });
+        }
       }
     }
   }
@@ -535,22 +630,25 @@ async function main() {
       moveIdByName.set(move.name, move.id);
     }
 
-    for (const [nickname, entries] of Object.entries(playerMovesData)) {
-      const playerIds = playerIdsByNickname.get(nickname);
-      if (!playerIds?.length) continue;
+    for (const source of playerMoveSources) {
+      for (const [nickname, entries] of Object.entries(source.data)) {
+        const playerIds = pickPlayersForNickname(nickname, source.seasons);
+        if (!playerIds.length) continue;
 
-      for (const { move, level } of entries) {
-        if (!missingSkillNames.has(move)) continue;
+        for (const { move, level } of entries) {
+          const canonical = resolveMoveName(move);
+          if (!missingSkillNames.has(canonical)) continue;
 
-        const moveId = moveIdByName.get(move);
-        if (!moveId) continue;
+          const moveId = moveIdByName.get(canonical);
+          if (!moveId) continue;
 
-        for (const playerId of playerIds) {
-          playerMoveRecords.push({
-            playerId,
-            moveId,
-            unlockLevel: level,
-          });
+          for (const player of playerIds) {
+            playerMoveRecords.push({
+              playerId: player.id,
+              moveId,
+              unlockLevel: level,
+            });
+          }
         }
       }
     }
@@ -562,7 +660,7 @@ async function main() {
   });
 
   console.log(
-    `\n⚡ ${playerMoveRecords.length} técnicas asignadas a ${Object.keys(playerMovesData).length} jugadores.`,
+    `\n⚡ ${playerMoveRecords.length} técnicas asignadas a ${totalPlayerKeys} entradas de repertorio.`,
   );
 
   console.log('\n🏆 ¡Plantillas cargadas desde JSON con éxito!');

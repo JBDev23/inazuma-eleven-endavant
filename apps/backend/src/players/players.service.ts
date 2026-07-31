@@ -2,28 +2,45 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePlayerDto } from './dto/create-player.dto';
 import { UpdatePlayerDto } from './dto/update-player.dto';
-import { addExperience, type PlayerWithDetails } from '@inazuma/shared';
+import {
+  addExperience,
+  type PlayerWithDetails,
+} from '@inazuma/shared';
 import { playerWithMovesInclude } from '../common/prisma-includes';
-import { formatPlayerWithMoves, formatPlayersWithMoves } from '../common/format-player';
+import {
+  enrichPlayerWithEquipment,
+  enrichPlayersWithEquipment,
+} from '../common/format-player';
 import { rosterResetData } from '../common/player-roster';
+import { getEconomyPricing } from '../common/economy-pricing';
 
 @Injectable()
 export class PlayersService {
   constructor(private prisma: PrismaService) {}
+
+  private async formatPlayer(raw: Parameters<typeof enrichPlayerWithEquipment>[0]) {
+    const economy = await getEconomyPricing(this.prisma);
+    return enrichPlayerWithEquipment(raw, economy);
+  }
+
+  private async formatPlayers(raw: Parameters<typeof enrichPlayersWithEquipment>[0]) {
+    const economy = await getEconomyPricing(this.prisma);
+    return enrichPlayersWithEquipment(raw, economy);
+  }
 
   async create(createPlayerDto: CreatePlayerDto) {
     const player = await this.prisma.player.create({
       data: createPlayerDto,
       include: playerWithMovesInclude,
     });
-    return formatPlayerWithMoves(player);
+    return this.formatPlayer(player);
   }
 
   async findAll() {
     const players = await this.prisma.player.findMany({
       include: playerWithMovesInclude,
     });
-    return formatPlayersWithMoves(players);
+    return this.formatPlayers(players);
   }
 
   async findOne(id: number) {
@@ -36,7 +53,7 @@ export class PlayersService {
       throw new NotFoundException(`Player with id ${id} not found`);
     }
 
-    return formatPlayerWithMoves(player);
+    return this.formatPlayer(player);
   }
 
   async update(id: number, updatePlayerDto: UpdatePlayerDto) {
@@ -51,8 +68,13 @@ export class PlayersService {
     const oldOwnerId = player.ownerId;
     const ownerChanging = hasOwnerIdInDto && newOwnerId !== oldOwnerId;
 
+    // Precio dinámico: ignoramos price estático del DTO
+    const { price: _ignoredPrice, ...safeDto } = updatePlayerDto as UpdatePlayerDto & {
+      price?: number;
+    };
+
     const updated = await this.prisma.$transaction(async (tx) => {
-      const data: UpdatePlayerDto = { ...updatePlayerDto };
+      const data: UpdatePlayerDto = { ...safeDto };
 
       if (hasOwnerIdInDto && newOwnerId) {
         data.isFreeAgent = false;
@@ -83,7 +105,7 @@ export class PlayersService {
       return result;
     });
 
-    return formatPlayerWithMoves(updated);
+    return this.formatPlayer(updated);
   }
 
   async remove(id: number) {
@@ -97,12 +119,15 @@ export class PlayersService {
       where: { id },
       include: playerWithMovesInclude,
     });
-    return formatPlayerWithMoves(deleted);
+    return this.formatPlayer(deleted);
   }
 
   async bulkUpdate(playerIds: number[], updatePlayerDto: UpdatePlayerDto) {
     const uniqueIds = [...new Set(playerIds)];
-    const players = await this.updateMany(uniqueIds, updatePlayerDto);
+    const { price: _ignoredPrice, ...safeDto } = updatePlayerDto as UpdatePlayerDto & {
+      price?: number;
+    };
+    const players = await this.updateMany(uniqueIds, safeDto);
     return { updated: players.length, players };
   }
 
@@ -160,7 +185,7 @@ export class PlayersService {
       });
     });
 
-    return formatPlayerWithMoves(released);
+    return this.formatPlayer(released);
   }
 
   private async ensureNodeUnlocked(
@@ -193,7 +218,7 @@ export class PlayersService {
       });
       return {
         message: 'El jugador ya está al nivel máximo',
-        player: formatPlayerWithMoves(maxLevelPlayer),
+        player: await this.formatPlayer(maxLevelPlayer),
       };
     }
 
@@ -218,7 +243,7 @@ export class PlayersService {
       leveledUp,
       newLevel: level,
       currentXp: experience,
-      player: formatPlayerWithMoves(updatedPlayer),
+      player: await this.formatPlayer(updatedPlayer),
     };
   }
 }

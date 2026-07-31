@@ -269,6 +269,7 @@ export default function PlayerModal({
   const [liveLevel, setLiveLevel] = useState(player?.level ?? 1);
   const [liveExperience, setLiveExperience] = useState(player?.experience ?? 0);
   const [liveStatBonuses, setLiveStatBonuses] = useState(player?.statBonuses ?? {});
+  const [livePrice, setLivePrice] = useState(player?.price ?? 0);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -277,8 +278,9 @@ export default function PlayerModal({
       setLiveLevel(player.level);
       setLiveExperience(player.experience);
       setLiveStatBonuses(player.statBonuses ?? {});
+      setLivePrice(player.price ?? 0);
     }
-  }, [player?.id, player?.level, player?.experience, player?.statBonuses]);
+  }, [player?.id, player?.level, player?.experience, player?.statBonuses, player?.price]);
 
   useEffect(() => {
     if (!player) return;
@@ -307,7 +309,7 @@ export default function PlayerModal({
   const hasPcBonuses = hasStatBonuses(liveStatBonuses);
   const hasItemBonuses = hasItemStatChanges(statsWithPc, statsWithItems);
   const buyPrice = getFreeMarketPlayerPrice(
-    player.price ?? 0,
+    livePrice,
     resolveClubFacilities(facilities),
   );
   const hasCoachBonuses = activeCoach != null && STATS.some((s) => statsWithItems[s.key] !== displayStats[s.key]);
@@ -398,8 +400,9 @@ export default function PlayerModal({
               clubId={clubId}
               enablePcSpend
               onSpendComplete={async (updated) => {
-                setLiveStatBonuses(updated);
-                await onPcSpendComplete?.(updated);
+                setLiveStatBonuses(updated.statBonuses);
+                setLivePrice(updated.marketPrice);
+                await onPcSpendComplete?.(updated.statBonuses);
               }}
             />
           )}
@@ -547,16 +550,16 @@ export default function PlayerModal({
             <button type="button" disabled={isLoading || !player.nickname || !canAffordResource(resources, buyPrice, 'pp')} onClick={() => player.nickname && onAction("buy", player.nickname)} className="w-full flex items-center justify-center gap-3 bg-yellow-500 hover:bg-yellow-400 text-slate-950 text-lg font-black uppercase p-4 rounded-xl transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-wait">
               <span>Fichar por</span>
               <ResourceCostBadge amount={buyPrice} resource="pp" size="lg" />
-              {buyPrice < (player.price ?? 0) && (
-                <span className="text-xs line-through opacity-70">{player.price} PP</span>
+              {buyPrice < livePrice && (
+                <span className="text-xs line-through opacity-70">{livePrice} PP</span>
               )}
             </button>
           )}
 
           {isToll && (
-            <button type="button" disabled={isLoading || !player.nickname || !canAffordResource(resources, Math.floor((player.price ?? 0) / 2), 'pp')} onClick={() => player.nickname && onAction("toll", player.nickname)} className="w-full flex items-center justify-center gap-3 bg-red-600 hover:bg-red-500 text-white text-lg font-black uppercase p-4 rounded-xl transition-all hover:scale-[1.02] shadow-[0_0_15px_rgba(220,38,38,0.5)] disabled:opacity-50 disabled:cursor-wait">
+            <button type="button" disabled={isLoading || !player.nickname || !canAffordResource(resources, Math.floor(livePrice / 2), 'pp')} onClick={() => player.nickname && onAction("toll", player.nickname)} className="w-full flex items-center justify-center gap-3 bg-red-600 hover:bg-red-500 text-white text-lg font-black uppercase p-4 rounded-xl transition-all hover:scale-[1.02] shadow-[0_0_15px_rgba(220,38,38,0.5)] disabled:opacity-50 disabled:cursor-wait">
               <span>Pagar peaje</span>
-              <ResourceCostBadge amount={Math.floor((player.price ?? 0) / 2)} resource="pp" size="lg" className="bg-white/15! text-white! border-white/30!" />
+              <ResourceCostBadge amount={Math.floor(livePrice / 2)} resource="pp" size="lg" className="bg-white/15! text-white! border-white/30!" />
             </button>
           )}
 
@@ -569,7 +572,7 @@ export default function PlayerModal({
           {status === "owned" && (
             <button type="button" disabled={isLoading || !player.nickname} onClick={() => player.nickname && onAction("sell", player.nickname)} className="w-full flex items-center justify-center mt-3 gap-3 bg-slate-700 hover:bg-slate-600 text-white text-lg font-black uppercase p-4 rounded-xl transition-all hover:scale-[1.02] shadow-[0_0_15px_rgba(30,41,59,0.5)] disabled:opacity-50 disabled:cursor-wait">
               <span>Vender por</span>
-              <ResourceCostBadge amount={Math.floor((player.price ?? 0) / 2)} resource="pp" size="lg" className="bg-white/10! text-white! border-white/20!" />
+              <ResourceCostBadge amount={Math.floor(livePrice / 2)} resource="pp" size="lg" className="bg-white/10! text-white! border-white/20!" />
             </button>
           )}
 

@@ -2,10 +2,12 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: "/",
     name: "Inazuma Market",
-    short_name: "Inazuma",
+    short_name: "Market",
     description: "Árbol de fichajes de Inazuma Eleven",
     start_url: "/",
+    scope: "/",
     display: "standalone",
     orientation: "any",
     background_color: "#0f172a",

@@ -16,7 +16,6 @@ export default function AdminPlayerModal({ player, clubs, onClose, onSave }: Adm
   const [formData, setFormData] = useState<Partial<Player>>({
     level: player.level ?? 1,
     experience: player.experience ?? 0,
-    price: player.price ?? 0,
     isFreeAgent: player.isFreeAgent ?? false,
     ownerId: player.ownerId || "",
   });
@@ -87,16 +86,13 @@ export default function AdminPlayerModal({ player, clubs, onClose, onSave }: Adm
             </div>
           </div>
 
-          {/* Bloque Economía: Precio */}
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Precio Mercado (🪙)</label>
-            <input 
-              type="number" 
-              min="0"
-              value={formData.price}
-              onChange={(e) => setFormData({...formData, price: parseInt(e.target.value) || 0})}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-yellow-500 font-black focus:border-yellow-500 focus:outline-hidden"
-            />
+          {/* Precio dinámico (solo lectura) */}
+          <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+            <p className="text-xs font-bold text-slate-400 uppercase mb-0.5">Precio mercado</p>
+            <p className="text-yellow-500 font-black tabular-nums">{player.price ?? 0} PP</p>
+            <p className="text-[10px] text-slate-500 mt-1">
+              Calculado por nivel + PC (config global en Ajustes)
+            </p>
           </div>
 
           {/* Bloque Propiedad */}

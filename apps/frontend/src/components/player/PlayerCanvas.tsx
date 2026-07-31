@@ -80,6 +80,60 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
   }, [clubId, baseTeamSlug, setNodes, setEdges, fitView]);
 
 
+  /** Adjunta un submapa al grafo actual (sin tocar React state todavía). */
+  const attachSubgraph = useCallback(async (
+    gatewayNode: Node,
+    currentNodes: Node[],
+    currentEdges: Edge[],
+  ): Promise<{ nodes: Node[]; edges: Edge[]; targetMapId: string } | null> => {
+    const targetMapId = gatewayNode.data.targetMapId as string;
+    const targetTeamSlug = gatewayNode.data.targetTeamSlug as string;
+    const currentTeamSlug = (gatewayNode.data.sourceTeamSlug as string) || baseTeamSlug;
+
+    const targetMap = await api.market.getTeamMapForUser(clubId, targetTeamSlug, currentTeamSlug);
+
+    const entryNode = (targetMap.nodes as Node[]).find(
+      (n) => n.type === 'entryNode' && n.data.sourceTeamSlug === currentTeamSlug,
+    );
+
+    if (!entryNode) {
+      console.error(`No se encontró una entrada desde ${currentTeamSlug} en el mapa de ${targetTeamSlug}`);
+      return null;
+    }
+
+    const deltaX = gatewayNode.position.x - entryNode.position.x;
+    const deltaY = gatewayNode.position.y - entryNode.position.y + 150;
+
+    const shiftedNodes = targetMap.nodes.map((node: Node) => ({
+      ...node,
+      id: `${targetMapId}-${node.id}`,
+      position: { x: node.position.x + deltaX, y: node.position.y + deltaY },
+    }));
+
+    const shiftedEdges = targetMap.edges.map((edge: Edge) => ({
+      ...edge,
+      id: `${targetMapId}-${edge.id}`,
+      source: `${targetMapId}-${edge.source}`,
+      target: `${targetMapId}-${edge.target}`,
+    }));
+
+    const bridgeEdge: Edge = {
+      id: `bridge-${gatewayNode.id}-${targetMapId}`,
+      source: gatewayNode.id,
+      target: `${targetMapId}-${entryNode.id}`,
+      animated: true,
+      style: { stroke: '#a855f7', strokeWidth: 4, strokeDasharray: '5,5' },
+      sourceHandle: 'bottom',
+      targetHandle: 'top',
+    };
+
+    return {
+      nodes: [...currentNodes, ...shiftedNodes],
+      edges: [...currentEdges, ...shiftedEdges, bridgeEdge],
+      targetMapId,
+    };
+  }, [clubId, baseTeamSlug]);
+
   // 🎯 2. FETCH DINÁMICO (Cuando pulsas una puerta)
   const toggleSubgraph = useCallback(async (gatewayNode: Node) => {
     if (gatewayNode.data.isLocked) {
@@ -88,19 +142,16 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
     }
 
     const targetMapId = gatewayNode.data.targetMapId as string;
-    const targetTeamSlug = gatewayNode.data.targetTeamSlug as string;
-    const currentTeamSlug = gatewayNode.data.sourceTeamSlug as string || baseTeamSlug;
-    
+
     // CASO A: Si ya está abierto, lo cerramos
     if (loadedMaps.includes(targetMapId)) {
       setNodes(prev => prev.filter(node => !node.id.startsWith(`${targetMapId}-`)));
-      setEdges(prev => prev.filter(edge => 
-        !edge.id.startsWith(`${targetMapId}-`) && 
+      setEdges(prev => prev.filter(edge =>
+        !edge.id.startsWith(`${targetMapId}-`) &&
         edge.id !== `bridge-${gatewayNode.id}-${targetMapId}`
       ));
       setLoadedMaps(prev => prev.filter(id => id !== targetMapId));
-      
-      // Devolvemos la cámara al Gateway que acabamos de pulsar
+
       setCenter(gatewayNode.position.x, gatewayNode.position.y, { zoom: 1, duration: 800 });
       return;
     }
@@ -109,73 +160,27 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
     try {
       setIsLoading(true);
       setInlineError(null);
-      
-      // 1. Llamada a tu API real usando el slug del equipo destino
-      const targetMap = await api.market.getTeamMapForUser(clubId, targetTeamSlug, currentTeamSlug);
 
-      // 2. Buscamos el nodo de entrada (EntryNode) en el nuevo mapa
-      // Buscamos el nodo que se conecte con nuestro mapa actual. 
-      // Por si acaso hubiera varias entradas en ese mapa, comprobamos el sourceMapId.
-      const entryNode = (targetMap.nodes as Node[]).find((n: any) => 
-        n.type === 'entryNode' && n.data.sourceTeamSlug === currentTeamSlug
-      );
+      const attached = await attachSubgraph(gatewayNode, nodes, edges);
+      if (!attached) return;
 
-      if (!entryNode) {
-          console.error(`No se encontró una entrada desde ${currentTeamSlug} en el mapa de ${targetTeamSlug}`);
-          return;
+      setNodes(attached.nodes);
+      setEdges(attached.edges);
+      setLoadedMaps(prev => [...prev, attached.targetMapId]);
+
+      const focusNode = attached.nodes.find((n) => n.id.startsWith(`${attached.targetMapId}-`));
+      if (focusNode) {
+        setTimeout(() => {
+          setCenter(focusNode.position.x, focusNode.position.y + 200, { zoom: 0.9, duration: 800 });
+        }, 100);
       }
-
-      // 3. Matemáticas de posicionamiento
-      // Calculamos cuánto hay que mover TODOS los nodos del nuevo mapa
-      // para que su EntryNode se coloque justo debajo de nuestro GatewayNode
-      const deltaX = gatewayNode.position.x - entryNode.position.x;
-      const deltaY = gatewayNode.position.y - entryNode.position.y + 150;
-
-      const shiftedNodes = targetMap.nodes.map((node: any) => ({
-        ...node,
-        // Añadimos el prefijo para evitar que IDs de diferentes mapas choquen
-        id: `${targetMapId}-${node.id}`, 
-        position: { x: node.position.x + deltaX, y: node.position.y + deltaY },
-      }));
-
-      const shiftedEdges = targetMap.edges.map((edge: any) => ({
-        ...edge,
-        id: `${targetMapId}-${edge.id}`,
-        // ¡OJO! A los source y targets también hay que ponerles el prefijo
-        source: `${targetMapId}-${edge.source}`,
-        target: `${targetMapId}-${edge.target}`,
-      }));
-
-      // 4. Creamos el puente que conecta el Gateway (viejo mapa) con el Entry (nuevo mapa)
-      const bridgeEdge: Edge = {
-        id: `bridge-${gatewayNode.id}-${targetMapId}`,
-        source: gatewayNode.id,
-        // El EntryNode del nuevo mapa ahora tiene prefijo
-        target: `${targetMapId}-${entryNode.id}`, 
-        animated: true,
-        style: { stroke: '#a855f7', strokeWidth: 4, strokeDasharray: '5,5' }, // Morado y punteado
-        sourceHandle: 'bottom', 
-        targetHandle: 'top'
-      };
-
-      // 5. Actualizamos el estado
-      setNodes(prev => [...prev, ...shiftedNodes]);
-      setEdges(prev => [...prev, ...shiftedEdges, bridgeEdge]);
-      setLoadedMaps(prev => [...prev, targetMapId]);
-
-      // 6. Movemos la cámara al centro del nuevo mapa
-      setTimeout(() => {
-        setCenter(shiftedNodes[0].position.x, shiftedNodes[0].position.y + 200, { zoom: 0.9, duration: 800 });
-      }, 100);
-
     } catch (error) {
       console.error(error);
       setInlineError(getApiErrorMessage(error, "No se pudo cargar la siguiente zona."));
     } finally {
       setIsLoading(false);
     }
-
-  }, [loadedMaps, setNodes, setEdges, setCenter, clubId]);
+  }, [loadedMaps, nodes, edges, attachSubgraph, setNodes, setEdges, setCenter]);
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     if (node.type === 'gatewayNode') {
@@ -186,12 +191,36 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
     }
   }, [toggleSubgraph]);
 
+  /** Recarga el mapa base y vuelve a abrir las zonas que ya estaban desplegadas. */
   const refreshMap = useCallback(async () => {
+    const openMapIds = loadedMaps.filter((id) => id !== baseTeamSlug);
+
     const mapRes = await api.market.getTeamMapForUser(clubId, baseTeamSlug);
-    setNodes(mapRes.nodes as Node[]);
-    setEdges(mapRes.edges as Edge[]);
-    setLoadedMaps([baseTeamSlug]);
-  }, [clubId, baseTeamSlug, setNodes, setEdges]);
+    let nextNodes = mapRes.nodes as Node[];
+    let nextEdges = mapRes.edges as Edge[];
+    const nextLoaded = [baseTeamSlug];
+
+    for (const targetMapId of openMapIds) {
+      const gateway = nextNodes.find(
+        (n) => n.type === 'gatewayNode' && n.data.targetMapId === targetMapId && !n.data.isLocked,
+      );
+      if (!gateway) continue;
+
+      try {
+        const attached = await attachSubgraph(gateway, nextNodes, nextEdges);
+        if (!attached) continue;
+        nextNodes = attached.nodes;
+        nextEdges = attached.edges;
+        nextLoaded.push(attached.targetMapId);
+      } catch (error) {
+        console.error(`No se pudo restaurar la zona ${targetMapId}`, error);
+      }
+    }
+
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+    setLoadedMaps(nextLoaded);
+  }, [clubId, baseTeamSlug, loadedMaps, attachSubgraph, setNodes, setEdges]);
 
   const handleModalAction = useCallback(async (action: 'buy' | 'toll' | 'sell', nickname: string) => {
     try {
@@ -234,7 +263,7 @@ function CanvasLogica({ clubId, baseTeamSlug, initialResources }: CanvasProps) {
           status={selectedNodeData.status}
           onClose={() => setSelectedNodeData(null)}
           onAction={handleModalAction}
-          isLoading={isLoading}
+          isLoading={isActionLoading}
           resources={resources}
           clubId={clubId}
           onDebugComplete={refreshMap}
