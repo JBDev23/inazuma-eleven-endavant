@@ -30,4 +30,19 @@ export class UpdateGameSettingsDto {
   @IsInt()
   @Min(0)
   playerPricePerPc?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  facilityUpgradeCostFrom0?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  facilityUpgradeCostFrom1?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  facilityUpgradeCostFrom2?: number;
 }

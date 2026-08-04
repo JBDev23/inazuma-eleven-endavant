@@ -141,9 +141,10 @@ export class MarketService {
         });
     }
 
-    async getUserClubs() {
+    async getUserClubs(options?: { forResources?: boolean }) {
         const [clubs, economy] = await Promise.all([
             this.prisma.userClub.findMany({
+                where: options?.forResources ? { hiddenFromResources: false } : undefined,
                 include: clubWithDetailsInclude,
             }),
             getEconomyPricing(this.prisma),
@@ -171,6 +172,7 @@ export class MarketService {
         pe?: number;
         yens?: number;
         pc?: number;
+        hiddenFromResources?: boolean;
     }) {
         const name = data.name.trim();
         if (!name) {
@@ -202,6 +204,9 @@ export class MarketService {
                 ...(data.pe !== undefined ? { pe: data.pe } : {}),
                 ...(data.yens !== undefined ? { yens: data.yens } : {}),
                 ...(data.pc !== undefined ? { pc: data.pc } : {}),
+                ...(data.hiddenFromResources !== undefined
+                    ? { hiddenFromResources: data.hiddenFromResources }
+                    : {}),
             },
             include: clubWithDetailsInclude,
         });
@@ -1117,20 +1122,21 @@ export class MarketService {
         baseTeamSlug?: string | null;
         shieldUrl?: string | null;
         activeCoachId?: number | null;
+        hiddenFromResources?: boolean;
     }) {
         const existingClub = await this.prisma.userClub.findUnique({
           where: { id },
         });
-    
+
         if (!existingClub) {
           throw new NotFoundException(`El club con ID ${id} no existe.`);
         }
-    
+
         if (updateData.name && updateData.name !== existingClub.name) {
           const nameInUse = await this.prisma.userClub.findUnique({
             where: { name: updateData.name },
           });
-    
+
           if (nameInUse) {
             throw new ConflictException(
               `El nombre "${updateData.name}" ya está siendo utilizado por otro club.`
@@ -1145,6 +1151,9 @@ export class MarketService {
         if (updateData.baseTeamSlug !== undefined) data.baseTeamSlug = updateData.baseTeamSlug;
         if (updateData.shieldUrl !== undefined && updateData.shieldUrl !== null) {
           data.shieldUrl = updateData.shieldUrl;
+        }
+        if (updateData.hiddenFromResources !== undefined) {
+          data.hiddenFromResources = updateData.hiddenFromResources;
         }
 
         if (updateData.password !== undefined) {
@@ -1749,27 +1758,28 @@ export class MarketService {
                 throw new BadRequestException('La instalación ya está al nivel máximo.');
             }
 
-            const cost = getUpgradeCost(currentLevel);
+            const economy = await getEconomyPricing(tx);
+            const cost = getUpgradeCost(currentLevel, economy);
             if (cost == null) {
                 throw new BadRequestException('No se puede mejorar más esta instalación.');
             }
 
-            if (club.pp < cost) {
-                throw new BadRequestException(`No tienes suficientes PP. Necesitas ${cost}.`);
+            if (club.yens < cost) {
+                throw new BadRequestException(`No tienes suficientes YE. Necesitas ${cost}.`);
             }
 
             const targetLevel = (currentLevel + 1) as FacilityLevel;
 
             await tx.userClub.update({
                 where: { id: clubId },
-                data: { pp: { decrement: cost } },
+                data: { yens: { decrement: cost } },
             });
 
             await tx.transaction.create({
                 data: {
                     clubId,
                     description: `Obra: ${FACILITY_LABELS[facilityId]} → Nv.${targetLevel}`,
-                    amountPP: -cost,
+                    amountYens: -cost,
                 },
             });
 
@@ -1781,7 +1791,7 @@ export class MarketService {
             return {
                 success: true,
                 facility: formatClubFacility(updated),
-                newBalance: club.pp - cost,
+                newBalance: club.yens - cost,
             };
         });
     }

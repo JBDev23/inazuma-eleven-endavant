@@ -105,7 +105,10 @@ model UserClub {
   pe           Int      @default(0) // Puntos de Experiencia (Bolsa)
   yens         Int      @default(0) // Yenes
   pc           Int      @default(0) // Puntos de Característica
-  
+
+  /// Si true, el club no aparece en la pantalla pública de Recursos
+  hiddenFromResources Boolean @default(false)
+
   // Jugadores reales que este participante tiene en su plantilla actual
   roster       Player[] @relation("CurrentOwner")
 
@@ -417,6 +420,11 @@ model GameSettings {
   baseCoachPrice      Int @default(30)
   coachPricePerLevel  Int @default(10)
   playerPricePerPc    Int @default(1)
+
+  /** Costes en YE de mejoras de ciudad deportiva (nivel N → N+1) */
+  facilityUpgradeCostFrom0 Int @default(800)
+  facilityUpgradeCostFrom1 Int @default(2000)
+  facilityUpgradeCostFrom2 Int @default(5000)
 }
 
 model SessionXpConfig {

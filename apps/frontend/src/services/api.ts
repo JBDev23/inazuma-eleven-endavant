@@ -280,8 +280,9 @@ export const api = {
       });
     },
 
-    async getUserClubs() {
-      return requestJson<UserClub[]>("/market/user-clubs", {
+    async getUserClubs(options?: { forResources?: boolean }) {
+      const query = options?.forResources ? "?forResources=1" : "";
+      return requestJson<UserClub[]>(`/market/user-clubs${query}`, {
         cache: "no-store",
         fallbackMessage: "No se pudieron cargar los clubes del mercado.",
       });
@@ -358,6 +359,7 @@ export const api = {
       pe?: number;
       yens?: number;
       pc?: number;
+      hiddenFromResources?: boolean;
     }) {
       return requestJson<UserClub>("/market/user-clubs", {
         method: "POST",
@@ -820,6 +822,9 @@ export const api = {
       baseCoachPrice?: number;
       coachPricePerLevel?: number;
       playerPricePerPc?: number;
+      facilityUpgradeCostFrom0?: number;
+      facilityUpgradeCostFrom1?: number;
+      facilityUpgradeCostFrom2?: number;
     }): Promise<GameSettings> {
       return requestJson<GameSettings>("/game-settings", {
         method: "PATCH",

@@ -22,8 +22,10 @@ export class MarketController {
   }
   
   @Get('user-clubs')
-  async getUserClubs() {
-    return this.marketService.getUserClubs();
+  async getUserClubs(@Query('forResources') forResources?: string) {
+    return this.marketService.getUserClubs({
+      forResources: forResources === '1' || forResources === 'true',
+    });
   }
 
   @Post('user-clubs')

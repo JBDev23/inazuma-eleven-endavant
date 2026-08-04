@@ -13,6 +13,7 @@ import {
   getConstructionMap,
   type ClubFacilityRecord,
   type FacilityId,
+  type FacilityUpgradeCosts,
 } from './types';
 import type { ClubResources } from '@inazuma/shared';
 
@@ -20,6 +21,7 @@ type SportsCityMapProps = {
   facilities: ClubFacilityRecord[];
   clubName?: string;
   resources: ClubResources;
+  upgradeCosts?: FacilityUpgradeCosts;
   onUpgrade: (facilityId: FacilityId) => Promise<void>;
   onSetPitchElement?: (pitchElement: import('@inazuma/shared').NormalizedElement) => Promise<void>;
   isUpgrading?: boolean;
@@ -30,6 +32,7 @@ export function SportsCityMap({
   facilities,
   clubName,
   resources,
+  upgradeCosts,
   onUpgrade,
   onSetPitchElement,
   isUpgrading = false,
@@ -203,6 +206,7 @@ export function SportsCityMap({
           facilityId={selectedId}
           facility={selectedFacility}
           resources={resources}
+          upgradeCosts={upgradeCosts}
           onClose={() => setSelectedId(null)}
           onUpgrade={onUpgrade}
           onSetPitchElement={onSetPitchElement}

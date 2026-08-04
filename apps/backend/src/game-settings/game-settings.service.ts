@@ -43,6 +43,9 @@ export class GameSettingsService {
           baseCoachPrice: 30,
           coachPricePerLevel: 10,
           playerPricePerPc: 1,
+          facilityUpgradeCostFrom0: 800,
+          facilityUpgradeCostFrom1: 2000,
+          facilityUpgradeCostFrom2: 5000,
         },
       });
     }
@@ -100,6 +103,9 @@ export class GameSettingsService {
       baseCoachPrice: settings.baseCoachPrice,
       coachPricePerLevel: settings.coachPricePerLevel,
       playerPricePerPc: settings.playerPricePerPc,
+      facilityUpgradeCostFrom0: settings.facilityUpgradeCostFrom0,
+      facilityUpgradeCostFrom1: settings.facilityUpgradeCostFrom1,
+      facilityUpgradeCostFrom2: settings.facilityUpgradeCostFrom2,
       sessionConfigs: sessionConfigs.map((c) => this.mapSessionConfig(c)),
     };
   }
@@ -120,6 +126,15 @@ export class GameSettingsService {
           coachPricePerLevel: dto.coachPricePerLevel,
         }),
         ...(dto.playerPricePerPc !== undefined && { playerPricePerPc: dto.playerPricePerPc }),
+        ...(dto.facilityUpgradeCostFrom0 !== undefined && {
+          facilityUpgradeCostFrom0: dto.facilityUpgradeCostFrom0,
+        }),
+        ...(dto.facilityUpgradeCostFrom1 !== undefined && {
+          facilityUpgradeCostFrom1: dto.facilityUpgradeCostFrom1,
+        }),
+        ...(dto.facilityUpgradeCostFrom2 !== undefined && {
+          facilityUpgradeCostFrom2: dto.facilityUpgradeCostFrom2,
+        }),
       },
     });
 

@@ -8,6 +8,12 @@ export interface EconomyPricingSettings {
   baseCoachPrice: number;
   coachPricePerLevel: number;
   playerPricePerPc: number;
+  /** Coste en YE para subir instalación de nivel 0 → 1 */
+  facilityUpgradeCostFrom0: number;
+  /** Coste en YE para subir instalación de nivel 1 → 2 */
+  facilityUpgradeCostFrom1: number;
+  /** Coste en YE para subir instalación de nivel 2 → 3 */
+  facilityUpgradeCostFrom2: number;
 }
 
 export const DEFAULT_ECONOMY_PRICING: EconomyPricingSettings = {
@@ -16,6 +22,9 @@ export const DEFAULT_ECONOMY_PRICING: EconomyPricingSettings = {
   baseCoachPrice: 30,
   coachPricePerLevel: 10,
   playerPricePerPc: 1,
+  facilityUpgradeCostFrom0: 800,
+  facilityUpgradeCostFrom1: 2000,
+  facilityUpgradeCostFrom2: 5000,
 };
 
 export function sumStatBonuses(

@@ -170,6 +170,8 @@ export interface UserClub {
   pe: number;
   yens: number;
   pc: number;
+  /** Si true, el club no aparece en la pantalla pública de Recursos */
+  hiddenFromResources: boolean;
   activeFormation11Id: number | null;
   activeFormation4Id: number | null;
   roster: PlayerWithDetails[];
@@ -193,10 +195,14 @@ export interface CreateUserClubDto {
   pe?: number;
   yens?: number;
   pc?: number;
+  hiddenFromResources?: boolean;
 }
 
 export type UpdateUserClubDto = Partial<
-  Pick<UserClub, 'name' | 'password' | 'baseTeamSlug' | 'shieldUrl' | 'pp' | 'activeCoachId'>
+  Pick<
+    UserClub,
+    'name' | 'password' | 'baseTeamSlug' | 'shieldUrl' | 'pp' | 'activeCoachId' | 'hiddenFromResources'
+  >
 >;
 
 // ==========================================

@@ -20,5 +20,11 @@ export async function getEconomyPricing(
     coachPricePerLevel:
       settings.coachPricePerLevel ?? DEFAULT_ECONOMY_PRICING.coachPricePerLevel,
     playerPricePerPc: settings.playerPricePerPc ?? DEFAULT_ECONOMY_PRICING.playerPricePerPc,
+    facilityUpgradeCostFrom0:
+      settings.facilityUpgradeCostFrom0 ?? DEFAULT_ECONOMY_PRICING.facilityUpgradeCostFrom0,
+    facilityUpgradeCostFrom1:
+      settings.facilityUpgradeCostFrom1 ?? DEFAULT_ECONOMY_PRICING.facilityUpgradeCostFrom1,
+    facilityUpgradeCostFrom2:
+      settings.facilityUpgradeCostFrom2 ?? DEFAULT_ECONOMY_PRICING.facilityUpgradeCostFrom2,
   };
 }

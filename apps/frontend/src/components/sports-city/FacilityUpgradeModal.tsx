@@ -11,9 +11,10 @@ import {
   type ClubFacilityRecord,
   type FacilityId,
   type FacilityLevel,
+  type FacilityUpgradeCosts,
 } from './types';
 import type { ClubResources } from '@inazuma/shared';
-import { canAffordResource } from '@inazuma/shared';
+import { canAffordResource, DEFAULT_ECONOMY_PRICING } from '@inazuma/shared';
 import { ResourceCostBadge } from '@/components/economy/ResourceCostBadge';
 import { PitchElementSelector } from './PitchElementSelector';
 import type { NormalizedElement } from '@inazuma/shared';
@@ -22,6 +23,7 @@ type FacilityUpgradeModalProps = {
   facilityId: FacilityId;
   facility: ClubFacilityRecord;
   resources: ClubResources;
+  upgradeCosts?: FacilityUpgradeCosts;
   onClose: () => void;
   onUpgrade: (facilityId: FacilityId) => Promise<void>;
   onSetPitchElement?: (pitchElement: NormalizedElement) => Promise<void>;
@@ -40,6 +42,7 @@ export function FacilityUpgradeModal({
   facilityId,
   facility,
   resources,
+  upgradeCosts = DEFAULT_ECONOMY_PRICING,
   onClose,
   onUpgrade,
   onSetPitchElement,
@@ -50,8 +53,8 @@ export function FacilityUpgradeModal({
   const isConstructing = upgradingTo != null;
   const nextLevel = (level + 1) as FacilityLevel;
   const canUpgrade = level < 3 && !isConstructing;
-  const cost = canUpgrade ? getUpgradeCost(level) : null;
-  const canAfford = cost != null ? canAffordResource(resources, cost, 'pp') : false;
+  const cost = canUpgrade ? getUpgradeCost(level, upgradeCosts) : null;
+  const canAfford = cost != null ? canAffordResource(resources, cost, 'yens') : false;
   const benefits = FACILITY_BENEFITS[facilityId];
 
   useEffect(() => {
@@ -212,7 +215,7 @@ export function FacilityUpgradeModal({
                 <>
                   <ChevronUp size={20} />
                   <span>Mejorar a Nv.{nextLevel}</span>
-                  {cost != null && <ResourceCostBadge amount={cost} resource="pp" />}
+                  {cost != null && <ResourceCostBadge amount={cost} resource="yens" />}
                 </>
               )}
             </button>
