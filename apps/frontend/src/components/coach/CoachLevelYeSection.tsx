@@ -182,9 +182,13 @@ export function CoachLevelYeSection({
     (w) => w.includes("No tienes suficientes YE") || w.includes("no pertenece"),
   );
 
-  const adjustYe = (delta: number) => {
-    setYeCount((prev) => Math.max(1, Math.min(availableYe, prev + delta)));
+  const setAmount = (value: number) => {
+    setYeCount(Math.max(1, Math.min(availableYe, value)));
     setStep("idle");
+  };
+
+  const adjustYe = (delta: number) => {
+    setAmount(yeCount + delta);
   };
 
   const handleRedeem = async () => {
@@ -265,43 +269,67 @@ export function CoachLevelYeSection({
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => adjustYe(-1)}
-                disabled={yeCount <= 1 || isProcessing || step === "confirm"}
-                className="w-9 h-9 rounded-lg border border-slate-600 bg-slate-900 text-slate-300 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-40 transition-colors flex items-center justify-center"
-              >
-                <Minus size={16} />
-              </button>
-              <div className="text-center min-w-[4rem]">
-                <p className="text-2xl font-black text-white tabular-nums">{yeCount}</p>
-                <p className="text-[9px] font-black uppercase text-slate-500">YE</p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => adjustYe(-1)}
+                  disabled={yeCount <= 1 || isProcessing || step === "confirm"}
+                  className="w-9 h-9 rounded-lg border border-slate-600 bg-slate-900 text-slate-300 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-40 transition-colors flex items-center justify-center"
+                >
+                  <Minus size={16} />
+                </button>
+                <div className="text-center min-w-[4rem]">
+                  <p className="text-2xl font-black text-white tabular-nums">{yeCount}</p>
+                  <p className="text-[9px] font-black uppercase text-slate-500">YE</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => adjustYe(1)}
+                  disabled={yeCount >= availableYe || isProcessing || step === "confirm"}
+                  className="w-9 h-9 rounded-lg border border-slate-600 bg-slate-900 text-slate-300 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-40 transition-colors flex items-center justify-center"
+                >
+                  <Plus size={16} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => adjustYe(1)}
-                disabled={yeCount >= availableYe || isProcessing || step === "confirm"}
-                className="w-9 h-9 rounded-lg border border-slate-600 bg-slate-900 text-slate-300 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-40 transition-colors flex items-center justify-center"
-              >
-                <Plus size={16} />
-              </button>
+
+              {coachPreview && (
+                <div className="text-right">
+                  <p className="text-sm font-black text-emerald-300 tabular-nums">
+                    +{coachPreview.xpGained} XP
+                  </p>
+                  {coachPreview.levelsGained > 0 && (
+                    <p className="text-[10px] font-black uppercase text-emerald-400">
+                      Sube {coachPreview.levelsGained} nivel
+                      {coachPreview.levelsGained > 1 ? "es" : ""}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
-            {coachPreview && (
-              <div className="text-right">
-                <p className="text-sm font-black text-emerald-300 tabular-nums">
-                  +{coachPreview.xpGained} XP
-                </p>
-                {coachPreview.levelsGained > 0 && (
-                  <p className="text-[10px] font-black uppercase text-emerald-400">
-                    Sube {coachPreview.levelsGained} nivel
-                    {coachPreview.levelsGained > 1 ? "es" : ""}
-                  </p>
-                )}
-              </div>
-            )}
+            <div className="flex flex-wrap gap-1.5">
+              {[5, 10].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => adjustYe(n)}
+                  disabled={yeCount >= availableYe || isProcessing || step === "confirm"}
+                  className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-slate-400 hover:border-emerald-700/50 hover:text-emerald-300 text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-40"
+                >
+                  +{n}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setAmount(availableYe)}
+                disabled={isProcessing || step === "confirm" || yeCount >= availableYe}
+                className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-slate-400 hover:border-emerald-700/50 hover:text-emerald-300 text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-40"
+              >
+                Máx
+              </button>
+            </div>
           </div>
 
           {preview?.warnings.map((warning) => (

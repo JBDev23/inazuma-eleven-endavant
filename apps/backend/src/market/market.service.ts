@@ -1404,9 +1404,18 @@ export class MarketService {
         });
     }
 
-    async spendPc(clubId: string, playerId: number, statKey: StatKey): Promise<SpendPcResult> {
+    async spendPc(
+        clubId: string,
+        playerId: number,
+        statKey: StatKey,
+        amount: number = 1,
+    ): Promise<SpendPcResult> {
         if (!STAT_KEYS.includes(statKey)) {
             throw new BadRequestException(`Stat inválida: ${statKey}`);
+        }
+
+        if (!Number.isInteger(amount) || amount < 1) {
+            throw new BadRequestException('La cantidad de mejora debe ser un entero positivo.');
         }
 
         const club = await this.prisma.userClub.findUnique({
@@ -1435,17 +1444,19 @@ export class MarketService {
             club.pc,
             currentBonuses,
             PC_COST_PER_STAT,
+            amount,
         );
 
         if (preview.warnings.length > 0) {
             throw new BadRequestException(preview.warnings.join(' '));
         }
 
-        const newBonuses = mergeStatBonus(currentBonuses, statKey);
+        const totalCost = preview.pcCost;
+        const newBonuses = mergeStatBonus(currentBonuses, statKey, amount);
 
         return this.prisma.$transaction(async (tx) => {
             const freshClub = await tx.userClub.findUnique({ where: { id: clubId } });
-            if (!freshClub || freshClub.pc < PC_COST_PER_STAT) {
+            if (!freshClub || freshClub.pc < totalCost) {
                 throw new BadRequestException(`No tienes suficientes PC. Disponibles: ${freshClub?.pc ?? 0}.`);
             }
 
@@ -1477,15 +1488,15 @@ export class MarketService {
                 data: {
                     clubId,
                     type: 'INTERNAL',
-                    description: `Mejora permanente +1 ${statLabels[statKey]} en ${player.name}`,
-                    amountPC: -PC_COST_PER_STAT,
+                    description: `Mejora permanente +${amount} ${statLabels[statKey]} en ${player.name}`,
+                    amountPC: -totalCost,
                     amountPP: 0,
                     amountPE: 0,
                     amountYens: 0,
                 },
             });
 
-            const newPcBalance = freshClub.pc - PC_COST_PER_STAT;
+            const newPcBalance = freshClub.pc - totalCost;
             await tx.userClub.update({
                 where: { id: clubId },
                 data: { pc: newPcBalance },

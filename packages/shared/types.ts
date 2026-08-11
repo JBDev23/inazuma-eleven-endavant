@@ -370,6 +370,8 @@ export interface RedeemPeResult {
 export interface SpendPcDto {
   playerId: number;
   statKey: StatKey;
+  /** Cantidad de mejoras (+N a la stat). Por defecto 1. */
+  amount?: number;
 }
 
 export interface SpendPcResult {

@@ -525,11 +525,12 @@ export const api = {
       clubId: string,
       playerId: number,
       statKey: import("@inazuma/shared").StatKey,
+      amount: number = 1,
     ): Promise<import("@inazuma/shared").SpendPcResult> {
       return requestJson<import("@inazuma/shared").SpendPcResult>(`/market/${clubId}/pc/spend`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerId, statKey }),
+        body: JSON.stringify({ playerId, statKey, amount }),
         timeoutMs: DEFAULT_ACTION_TIMEOUT_MS,
         fallbackMessage: "No se pudieron gastar los PC.",
       });

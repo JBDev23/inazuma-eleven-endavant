@@ -5,8 +5,11 @@ import {
   AlertTriangle,
   Check,
   Coins,
+  Minus,
+  Plus,
   RefreshCw,
   Search,
+  X,
 } from "lucide-react";
 import {
   CLUB_RESOURCES,
@@ -29,6 +32,8 @@ const DEFAULT_PACKAGE: ClubResources = {
   pc: 0,
 };
 
+const QUANTITY_STEPS = [1, 5, 10, 25];
+
 function parseAmountInput(value: string): number {
   const parsed = parseInt(value, 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
@@ -38,6 +43,183 @@ function formatPackageSummary(pkg: ClubResources): string {
   return CLUB_RESOURCES.filter(({ key }) => pkg[key] > 0)
     .map(({ key, short }) => `+${pkg[key].toLocaleString("es-ES")} ${short}`)
     .join(" · ");
+}
+
+function scalePackage(pkg: ClubResources, quantity: number): ClubResources {
+  return {
+    pp: pkg.pp * quantity,
+    pe: pkg.pe * quantity,
+    yens: pkg.yens * quantity,
+    pc: pkg.pc * quantity,
+  };
+}
+
+interface ChapaQuantityModalProps {
+  club: UserClub;
+  packageAmounts: ClubResources;
+  packageLabel: string;
+  isSubmitting: boolean;
+  onClose: () => void;
+  onConfirm: (quantity: number) => void;
+}
+
+function ChapaQuantityModal({
+  club,
+  packageAmounts,
+  packageLabel,
+  isSubmitting,
+  onClose,
+  onConfirm,
+}: ChapaQuantityModalProps) {
+  const [quantityInput, setQuantityInput] = useState("1");
+  const quantity = Math.max(0, parseAmountInput(quantityInput));
+  const label = packageLabel.trim() || "Chapa";
+  const total = scalePackage(packageAmounts, quantity);
+  const totalSummary = formatPackageSummary(total);
+  const canConfirm = quantity > 0 && !isSubmitting;
+
+  const setQuantity = (next: number) => {
+    const clamped = Math.max(0, Math.floor(next));
+    setQuantityInput(clamped > 0 ? String(clamped) : "");
+  };
+
+  const handleQuantityChange = (value: string) => {
+    if (value === "") {
+      setQuantityInput("");
+      return;
+    }
+    const digitsOnly = value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+    setQuantityInput(digitsOnly);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in"
+      onClick={isSubmitting ? undefined : onClose}
+    >
+      <div
+        className="bg-slate-900 border border-slate-700 w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="shrink-0 p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+          <div className="flex items-center gap-2 min-w-0">
+            <Coins className="text-amber-400 w-5 h-5 shrink-0" />
+            <h3 className="font-black text-white uppercase tracking-wider text-sm sm:text-base truncate">
+              Canjear {label}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="shrink-0 p-2 -mr-2 text-slate-400 hover:text-white transition-colors touch-manipulation disabled:opacity-50"
+            aria-label="Cerrar"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto overscroll-contain p-4 sm:p-6 flex flex-col gap-5 scrollbar-hide">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-slate-950 border border-slate-800 rounded-full flex items-center justify-center shrink-0 overflow-hidden p-1">
+              <ClubShield
+                shieldUrl={club.shieldUrl}
+                alt={club.name}
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div className="min-w-0">
+              <p className="font-black text-white truncate">{club.name}</p>
+              <ClubResourcesDisplay
+                resources={pickClubResources(club)}
+                variant="inline"
+                className="mt-1 flex-wrap"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              Número de {label.toLowerCase()}s
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setQuantity(quantity - 1)}
+                disabled={quantity <= 0 || isSubmitting}
+                className="shrink-0 w-12 h-12 rounded-xl border border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800 disabled:opacity-40 touch-manipulation flex items-center justify-center"
+                aria-label="Restar una"
+              >
+                <Minus size={18} />
+              </button>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={quantityInput}
+                onChange={(e) => handleQuantityChange(e.target.value)}
+                disabled={isSubmitting}
+                className="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-center text-3xl font-black tabular-nums text-amber-300 outline-none focus:border-amber-500 disabled:opacity-50"
+                aria-label={`Cantidad de ${label}`}
+              />
+              <button
+                type="button"
+                onClick={() => setQuantity(quantity + 1)}
+                disabled={isSubmitting}
+                className="shrink-0 w-12 h-12 rounded-xl border border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800 disabled:opacity-40 touch-manipulation flex items-center justify-center"
+                aria-label="Sumar una"
+              >
+                <Plus size={18} />
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {QUANTITY_STEPS.map((step) => (
+                <button
+                  key={step}
+                  type="button"
+                  onClick={() => setQuantity(quantity + step)}
+                  disabled={isSubmitting}
+                  className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-950 text-xs font-black uppercase tracking-wider text-slate-300 hover:border-amber-500/50 hover:text-amber-300 disabled:opacity-40 touch-manipulation"
+                >
+                  +{step}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 flex flex-col gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              Total a sumar
+            </p>
+            <p className="text-sm sm:text-base font-black text-amber-300">
+              {quantity > 0
+                ? `${quantity} × ${label} → ${totalSummary}`
+                : "Indica al menos 1"}
+            </p>
+          </div>
+        </div>
+
+        <div className="shrink-0 p-4 border-t border-slate-800 bg-slate-950 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="flex-1 py-3 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 font-bold hover:bg-slate-800 disabled:opacity-50 touch-manipulation"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(quantity)}
+            disabled={!canConfirm}
+            className="flex-1 py-3 rounded-xl bg-amber-500 text-slate-950 font-black uppercase tracking-wider hover:bg-amber-400 disabled:opacity-50 touch-manipulation"
+          >
+            {isSubmitting ? "Canjeando…" : "Confirmar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function ResourceRedemptionTab() {
@@ -50,6 +232,7 @@ export default function ResourceRedemptionTab() {
 
   const [packageAmounts, setPackageAmounts] = useState<ClubResources>(DEFAULT_PACKAGE);
   const [packageLabel, setPackageLabel] = useState("Chapa");
+  const [selectedClub, setSelectedClub] = useState<UserClub | null>(null);
   const [redeemingClubId, setRedeemingClubId] = useState<string | null>(null);
   const [lastRedeemedId, setLastRedeemedId] = useState<string | null>(null);
 
@@ -80,6 +263,7 @@ export default function ResourceRedemptionTab() {
 
   const packageSummary = formatPackageSummary(packageAmounts);
   const hasAnyAmount = CLUB_RESOURCES.some(({ key }) => packageAmounts[key] > 0);
+  const label = packageLabel.trim() || "Chapa";
 
   const setResourceAmount = (key: ClubResourceKey, raw: string) => {
     const digitsOnly = raw.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
@@ -89,20 +273,33 @@ export default function ResourceRedemptionTab() {
     }));
   };
 
-  const handleRedeem = async (club: UserClub) => {
+  const openRedeemModal = (club: UserClub) => {
+    if (!hasAnyAmount) {
+      setActionError("Configura al menos un recurso mayor que cero.");
+      setSuccessMessage(null);
+      return;
+    }
+    setActionError(null);
+    setSelectedClub(club);
+  };
+
+  const handleRedeem = async (quantity: number) => {
+    if (!selectedClub || quantity <= 0) return;
     if (!hasAnyAmount) {
       setActionError("Configura al menos un recurso mayor que cero.");
       setSuccessMessage(null);
       return;
     }
 
-    const label = packageLabel.trim() || "Chapa";
+    const club = selectedClub;
+    const total = scalePackage(packageAmounts, quantity);
+    const totalSummary = formatPackageSummary(total);
     const transactionData: AddTransactionDto = {
-      amountPP: packageAmounts.pp,
-      amountPE: packageAmounts.pe,
-      amountYens: packageAmounts.yens,
-      amountPC: packageAmounts.pc,
-      description: `Canjeo: ${label}`,
+      amountPP: total.pp,
+      amountPE: total.pe,
+      amountYens: total.yens,
+      amountPC: total.pc,
+      description: `Canjeo: ${quantity}× ${label}`,
     };
 
     setRedeemingClubId(club.id);
@@ -116,8 +313,9 @@ export default function ResourceRedemptionTab() {
       );
       setLastRedeemedId(club.id);
       setSuccessMessage(
-        `${club.name}: ${packageSummary || "sin cambios"} (${label})`,
+        `${club.name}: ${totalSummary || "sin cambios"} (${quantity}× ${label})`,
       );
+      setSelectedClub(null);
     } catch (error) {
       setActionError(getApiErrorMessage(error, "Error al canjear recursos."));
     } finally {
@@ -134,7 +332,7 @@ export default function ResourceRedemptionTab() {
             Valor de la chapa
           </h2>
           <p className="text-slate-500 text-xs sm:text-sm mt-1">
-            Configura cuánto suma cada canjeo. Luego pulsa un club para aplicarlo.
+            Configura cuánto vale cada chapa. Luego pulsa un club y elige cuántas canjear.
           </p>
         </div>
 
@@ -181,7 +379,7 @@ export default function ResourceRedemptionTab() {
 
         <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-            Cada canjeo sumará
+            Cada chapa sumará
           </p>
           <p className="text-sm sm:text-base font-black text-amber-300">
             {hasAnyAmount ? packageSummary : "Configura al menos un recurso"}
@@ -251,7 +449,6 @@ export default function ResourceRedemptionTab() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3 sm:p-4">
             {filteredClubs.map((club) => {
-              const isRedeeming = redeemingClubId === club.id;
               const wasJustRedeemed = lastRedeemedId === club.id;
               const busy = redeemingClubId !== null;
 
@@ -260,7 +457,7 @@ export default function ResourceRedemptionTab() {
                   key={club.id}
                   type="button"
                   disabled={!hasAnyAmount || busy}
-                  onClick={() => handleRedeem(club)}
+                  onClick={() => openRedeemModal(club)}
                   className={`text-left rounded-xl border p-3 sm:p-4 transition-all touch-manipulation min-h-[88px] disabled:opacity-50 disabled:cursor-not-allowed ${
                     wasJustRedeemed
                       ? "border-emerald-500/60 bg-emerald-950/40 ring-1 ring-emerald-500/40"
@@ -278,11 +475,7 @@ export default function ResourceRedemptionTab() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="font-black text-white truncate">{club.name}</p>
-                        {isRedeeming ? (
-                          <span className="shrink-0 text-[10px] font-black uppercase text-amber-300">
-                            Canjeando…
-                          </span>
-                        ) : wasJustRedeemed ? (
+                        {wasJustRedeemed ? (
                           <Check size={14} className="shrink-0 text-emerald-400" />
                         ) : null}
                       </div>
@@ -299,6 +492,20 @@ export default function ResourceRedemptionTab() {
           </div>
         )}
       </div>
+
+      {selectedClub && (
+        <ChapaQuantityModal
+          club={selectedClub}
+          packageAmounts={packageAmounts}
+          packageLabel={packageLabel}
+          isSubmitting={redeemingClubId === selectedClub.id}
+          onClose={() => {
+            if (redeemingClubId) return;
+            setSelectedClub(null);
+          }}
+          onConfirm={handleRedeem}
+        />
+      )}
     </div>
   );
 }

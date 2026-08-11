@@ -203,7 +203,7 @@ export class MarketController {
     @Param('clubId') clubId: string,
     @Body() body: SpendPcDto,
   ) {
-    return this.marketService.spendPc(clubId, body.playerId, body.statKey);
+    return this.marketService.spendPc(clubId, body.playerId, body.statKey, body.amount ?? 1);
   }
 
   @Get('items')
