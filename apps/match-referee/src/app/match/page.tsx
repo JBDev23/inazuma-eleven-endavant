@@ -714,7 +714,7 @@ export default function MatchPage() {
   const anyFuryActive = homeFuryActive || awayFuryActive;
 
   return (
-    <div className={`min-h-screen text-white flex flex-col items-center py-6 px-4 pb-32 ${!kickoffResolved || isHalfTimeBlocking || isPenaltyShootoutActive ? "pointer-events-none select-none" : ""}`}>
+    <div className={`min-h-screen text-white flex flex-col items-center py-6 px-4 pb-32 ${!kickoffResolved || isHalfTimeBlocking || (isPenaltyShootoutActive && !isPenaltyDuelOpen) ? "pointer-events-none select-none" : ""}`}>
       <MatchDebugMenu onRestart={handleRestartMatch} onEnd={handleEndMatch} />
       <MatchFacilityAbilitiesPanel />
       {/* Fondo Fijo */}
@@ -1232,7 +1232,7 @@ export default function MatchPage() {
         />
       )}
 
-      {penaltyShootout?.phase === "shooting" && homeTeam && awayTeam && (
+      {penaltyShootout?.phase === "shooting" && !isPenaltyDuelOpen && homeTeam && awayTeam && (
         <PenaltyShootoutPanel
           homeTeam={homeTeam}
           awayTeam={awayTeam}
