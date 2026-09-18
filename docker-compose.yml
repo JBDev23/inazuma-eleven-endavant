@@ -5,9 +5,9 @@ services:
     container_name: inazuma-db
     restart: always
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: inazuma_password
-      POSTGRES_DB: inazuma_market
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-inazuma_password}
+      POSTGRES_DB: ${POSTGRES_DB:-inazuma_market}
     ports:
       - "5435:5432"
     volumes:

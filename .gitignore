@@ -52,9 +52,39 @@ coverage/
 # Misc
 .temp/
 .tmp/
-*.pem
 pids
 *.pid
 *.seed
 *.pid.lock
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Databases (might contain sensitive dev/test data)
+*.sqlite
+*.sqlite3
+*.db
+*.db3
+
+# Backup, Swap, and temporary files
+*.bak
+*.swp
+*.swo
+*~
+*.orig
+
+# Secrets, API Keys, and Credentials
+*.key
+*.cert
+*.csr
+*.keystore
+*.pem
+*.rsa
+*.dsa
+*.ecdsa
+*.ed25519
+*.p12
+*.pfx
+client_secret*.json
+service-account*.json
+credentials*.json
+*secret*.json
+docker-compose.override.yml
