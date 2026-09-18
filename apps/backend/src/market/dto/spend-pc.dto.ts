@@ -1,4 +1,4 @@
-import { IsIn, IsInt } from 'class-validator';
+import { IsIn, IsInt, IsOptional, Min } from 'class-validator';
 import { STAT_KEYS, type StatKey } from '@inazuma/shared';
 
 export class SpendPcDto {
@@ -7,4 +7,9 @@ export class SpendPcDto {
 
   @IsIn(STAT_KEYS)
   statKey!: StatKey;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  amount?: number;
 }

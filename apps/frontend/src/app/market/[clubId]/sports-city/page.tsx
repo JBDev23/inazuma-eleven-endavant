@@ -3,8 +3,8 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, Building2 } from "lucide-react";
-import { pickClubResources } from "@inazuma/shared";
-import type { ClubFacilityRecord, NormalizedElement, UserClub } from "@inazuma/shared";
+import { pickClubResources, DEFAULT_ECONOMY_PRICING } from "@inazuma/shared";
+import type { ClubFacilityRecord, FacilityUpgradeCosts, NormalizedElement, UserClub } from "@inazuma/shared";
 import { api, getApiErrorMessage } from "@/services/api";
 import { ClubResourcesDisplay } from "@/components/economy/ClubResourcesDisplay";
 import { ClubShield } from "@/components/club/ClubShield";
@@ -16,6 +16,7 @@ export default function SportsCityPage({ params }: { params: Promise<{ clubId: s
   const { clubId } = use(params);
   const [club, setClub] = useState<UserClub | null>(null);
   const [facilities, setFacilities] = useState<ClubFacilityRecord[]>([]);
+  const [upgradeCosts, setUpgradeCosts] = useState<FacilityUpgradeCosts>(DEFAULT_ECONOMY_PRICING);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [isSavingPitchElement, setIsSavingPitchElement] = useState(false);
@@ -26,12 +27,18 @@ export default function SportsCityPage({ params }: { params: Promise<{ clubId: s
     setIsLoading(true);
     setLoadError(null);
     try {
-      const [clubRes, cityRes] = await Promise.all([
+      const [clubRes, cityRes, settings] = await Promise.all([
         api.market.getUserClub(clubId),
         api.market.getSportsCity(clubId),
+        api.gameSettings.get(),
       ]);
       setClub(clubRes);
       setFacilities(cityRes.facilities);
+      setUpgradeCosts({
+        facilityUpgradeCostFrom0: settings.facilityUpgradeCostFrom0,
+        facilityUpgradeCostFrom1: settings.facilityUpgradeCostFrom1,
+        facilityUpgradeCostFrom2: settings.facilityUpgradeCostFrom2,
+      });
     } catch (error) {
       console.error(error);
       setLoadError(error);
@@ -52,7 +59,7 @@ export default function SportsCityPage({ params }: { params: Promise<{ clubId: s
       setFacilities((prev) =>
         prev.map((f) => (f.facilityId === facilityId ? result.facility : f)),
       );
-      setClub((prev) => (prev ? { ...prev, pp: result.newBalance } : prev));
+      setClub((prev) => (prev ? { ...prev, yens: result.newBalance } : prev));
     } catch (error) {
       setActionError(getApiErrorMessage(error, "No se pudo iniciar la obra."));
     } finally {
@@ -146,6 +153,7 @@ export default function SportsCityPage({ params }: { params: Promise<{ clubId: s
             facilities={facilities}
             clubName={club.name}
             resources={pickClubResources(club)}
+            upgradeCosts={upgradeCosts}
             onUpgrade={handleUpgrade}
             onSetPitchElement={handleSetPitchElement}
             isUpgrading={isUpgrading}

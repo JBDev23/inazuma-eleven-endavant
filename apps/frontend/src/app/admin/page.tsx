@@ -11,6 +11,7 @@ import {
   Building2,
   LayoutGrid,
   Shield,
+  Coins,
   type LucideIcon,
 } from "lucide-react";
 
@@ -22,6 +23,7 @@ import CoachesTab from "@/components/admin/CoachesTab";
 import FormationsTab from "@/components/admin/FormationsTab";
 import GameSettingsTab from "@/components/admin/GameSettingsTab";
 import SportsCitiesTab from "@/components/admin/SportsCitiesTab";
+import ResourceRedemptionTab from "@/components/admin/ResourceRedemptionTab";
 
 type AdminTabId =
   | "players"
@@ -31,7 +33,8 @@ type AdminTabId =
   | "coaches"
   | "formations"
   | "xp"
-  | "sports-city";
+  | "sports-city"
+  | "redemption";
 
 type AdminTab = {
   id: AdminTabId;
@@ -98,6 +101,13 @@ const ADMIN_TABS: AdminTab[] = [
     icon: Building2,
     activeClass: "bg-slate-900 text-emerald-400 border-t-2 border-emerald-400",
   },
+  {
+    id: "redemption",
+    label: "Canjeo",
+    shortLabel: "Canjeo",
+    icon: Coins,
+    activeClass: "bg-slate-900 text-amber-400 border-t-2 border-amber-400",
+  },
 ];
 
 export default function AdminDashboardPage() {
@@ -156,6 +166,7 @@ export default function AdminDashboardPage() {
         {activeTab === "formations" && <FormationsTab />}
         {activeTab === "xp" && <GameSettingsTab />}
         {activeTab === "sports-city" && <SportsCitiesTab />}
+        {activeTab === "redemption" && <ResourceRedemptionTab />}
       </div>
     </div>
   );

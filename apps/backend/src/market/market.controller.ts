@@ -22,8 +22,10 @@ export class MarketController {
   }
   
   @Get('user-clubs')
-  async getUserClubs() {
-    return this.marketService.getUserClubs();
+  async getUserClubs(@Query('forResources') forResources?: string) {
+    return this.marketService.getUserClubs({
+      forResources: forResources === '1' || forResources === 'true',
+    });
   }
 
   @Post('user-clubs')
@@ -201,7 +203,7 @@ export class MarketController {
     @Param('clubId') clubId: string,
     @Body() body: SpendPcDto,
   ) {
-    return this.marketService.spendPc(clubId, body.playerId, body.statKey);
+    return this.marketService.spendPc(clubId, body.playerId, body.statKey, body.amount ?? 1);
   }
 
   @Get('items')

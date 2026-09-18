@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 
 export class CreateUserClubDto {
   @IsString()
@@ -36,4 +36,8 @@ export class CreateUserClubDto {
   @IsInt()
   @Min(0)
   pc?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  hiddenFromResources?: boolean;
 }

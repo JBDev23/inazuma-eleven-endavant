@@ -7,6 +7,8 @@ import {
   ChevronDown,
   TrendingUp,
   X,
+  Minus,
+  Plus,
   type LucideIcon,
   Target,
   Sparkles,
@@ -29,6 +31,7 @@ import {
   canIncreaseAnyStatBonus,
   canIncreaseStatBonus,
   getMaxPcBonusForStat,
+  getRemainingPcBonusRoom,
   type StatKey,
   type PlayerStats,
 } from "@inazuma/shared";
@@ -46,6 +49,8 @@ const STAT_OPTIONS: Array<{ key: StatKey; label: string; icon: LucideIcon }> = [
   { key: "stamina", label: "Resistencia", icon: Battery },
   { key: "guts", label: "Determinación", icon: Flame },
 ];
+
+const AMOUNT_STEPS = [5, 10] as const;
 
 interface PlayerPcSectionProps {
   player: {
@@ -74,6 +79,7 @@ export function PlayerPcSection({
 }: PlayerPcSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedStat, setSelectedStat] = useState<StatKey | null>(null);
+  const [pcCount, setPcCount] = useState(1);
   const [step, setStep] = useState<"idle" | "confirm">("idle");
   const [isProcessing, setIsProcessing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -84,6 +90,11 @@ export function PlayerPcSection({
     availablePc >= PC_COST_PER_STAT &&
     canIncreaseAnyStatBonus(liveBonuses);
 
+  const maxAffordable = Math.floor(availablePc / PC_COST_PER_STAT);
+  const maxForStat = selectedStat
+    ? Math.min(maxAffordable, getRemainingPcBonusRoom(liveBonuses, selectedStat))
+    : 0;
+
   useEffect(() => {
     setLiveBonuses(player.statBonuses ?? {});
   }, [player.id, player.statBonuses]);
@@ -92,14 +103,20 @@ export function PlayerPcSection({
     setIsOpen(false);
     setStep("idle");
     setSelectedStat(null);
+    setPcCount(1);
   }, [player.id]);
+
+  useEffect(() => {
+    if (!selectedStat) return;
+    setPcCount((prev) => Math.max(1, Math.min(prev, Math.max(1, maxForStat))));
+  }, [selectedStat, maxForStat]);
 
   const levelStats = getStatsAtLevel(player.baseStats, player.maxStats, player.level);
   const statsWithBonuses = applyStatBonuses(levelStats, liveBonuses);
   const hasBonuses = hasStatBonuses(liveBonuses);
 
   const preview = useMemo(() => {
-    if (!isOpen || !canSpend || !selectedStat) return null;
+    if (!isOpen || !canSpend || !selectedStat || pcCount <= 0) return null;
     return buildSpendPcPreview(
       player.id,
       selectedStat,
@@ -107,8 +124,9 @@ export function PlayerPcSection({
       availablePc,
       liveBonuses,
       PC_COST_PER_STAT,
+      pcCount,
     );
-  }, [isOpen, canSpend, selectedStat, player, availablePc, liveBonuses]);
+  }, [isOpen, canSpend, selectedStat, pcCount, player, availablePc, liveBonuses]);
 
   const hasBlockingWarning = (preview?.warnings.length ?? 0) > 0;
 
@@ -117,6 +135,17 @@ export function PlayerPcSection({
     setIsOpen(false);
     setStep("idle");
     setSelectedStat(null);
+    setPcCount(1);
+  };
+
+  const setAmount = (value: number) => {
+    if (maxForStat < 1) return;
+    setPcCount(Math.max(1, Math.min(maxForStat, value)));
+    setStep("idle");
+  };
+
+  const adjustPc = (delta: number) => {
+    setAmount(pcCount + delta);
   };
 
   const handleSpend = async () => {
@@ -124,7 +153,7 @@ export function PlayerPcSection({
     try {
       setIsProcessing(true);
       setActionError(null);
-      const result = await api.market.spendPc(clubId, player.id, selectedStat);
+      const result = await api.market.spendPc(clubId, player.id, selectedStat, pcCount);
       setLiveBonuses(result.statBonuses);
       onSpendComplete?.({
         statBonuses: result.statBonuses,
@@ -132,6 +161,7 @@ export function PlayerPcSection({
       });
       setStep("idle");
       setSelectedStat(null);
+      setPcCount(1);
       setIsOpen(false);
     } catch (error: unknown) {
       setActionError(getApiErrorMessage(error, "Error al gastar PC."));
@@ -228,6 +258,7 @@ export function PlayerPcSection({
                   onClick={() => {
                     if (atMax) return;
                     setSelectedStat(key);
+                    setPcCount(1);
                     setStep("idle");
                   }}
                   disabled={isProcessing || step === "confirm" || atMax}
@@ -256,16 +287,66 @@ export function PlayerPcSection({
             })}
           </div>
 
-          {preview && selectedStat && (
-            <div className="text-center py-2 border border-slate-700/50 rounded-lg bg-slate-900/40">
-              <p className="text-xs font-bold text-slate-400">
-                {STAT_OPTIONS.find((s) => s.key === selectedStat)?.label}:{" "}
-                <span className="text-white tabular-nums">{statsWithBonuses[selectedStat]}</span>
-                {" → "}
-                <span className="text-amber-300 tabular-nums">
-                  {statsWithBonuses[selectedStat] + 1}
-                </span>
-              </p>
+          {selectedStat && maxForStat > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => adjustPc(-1)}
+                    disabled={pcCount <= 1 || isProcessing || step === "confirm"}
+                    className="w-9 h-9 rounded-lg border border-slate-600 bg-slate-900 text-slate-300 hover:border-amber-500 hover:text-amber-300 disabled:opacity-40 transition-colors flex items-center justify-center"
+                  >
+                    <Minus size={16} />
+                  </button>
+                  <div className="text-center min-w-[4rem]">
+                    <p className="text-2xl font-black text-white tabular-nums">{pcCount}</p>
+                    <p className="text-[9px] font-black uppercase text-slate-500">PC</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => adjustPc(1)}
+                    disabled={pcCount >= maxForStat || isProcessing || step === "confirm"}
+                    className="w-9 h-9 rounded-lg border border-slate-600 bg-slate-900 text-slate-300 hover:border-amber-500 hover:text-amber-300 disabled:opacity-40 transition-colors flex items-center justify-center"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+
+                {preview && (
+                  <div className="text-right">
+                    <p className="text-sm font-black text-amber-300 tabular-nums">
+                      {STAT_OPTIONS.find((s) => s.key === selectedStat)?.label}:{" "}
+                      {statsWithBonuses[selectedStat]} → {statsWithBonuses[selectedStat] + pcCount}
+                    </p>
+                    <p className="text-[10px] font-black uppercase text-slate-500">
+                      +{pcCount} (máx. +{preview.maxBonus})
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {AMOUNT_STEPS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => adjustPc(n)}
+                    disabled={pcCount >= maxForStat || isProcessing || step === "confirm"}
+                    className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-slate-400 hover:border-amber-700/50 hover:text-amber-300 text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-40"
+                  >
+                    +{n}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setAmount(maxForStat)}
+                  disabled={isProcessing || step === "confirm" || pcCount >= maxForStat}
+                  className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-slate-400 hover:border-amber-700/50 hover:text-amber-300 text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-40"
+                >
+                  Máx
+                </button>
+              </div>
             </div>
           )}
 
@@ -283,16 +364,16 @@ export function PlayerPcSection({
             <button
               type="button"
               onClick={() => setStep("confirm")}
-              disabled={isProcessing || hasBlockingWarning || !selectedStat}
+              disabled={isProcessing || hasBlockingWarning || !selectedStat || pcCount < 1}
               className="w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-black uppercase text-sm p-3 rounded-xl transition-all"
             >
               <TrendingUp size={16} />
-              Mejorar +1 ({PC_COST_PER_STAT} PC)
+              Mejorar +{pcCount} ({preview?.pcCost ?? pcCount * PC_COST_PER_STAT} PC)
             </button>
           ) : (
             <div className="space-y-2">
               <p className="text-xs text-center text-slate-400 font-bold">
-                ¿Confirmar mejora permanente de{" "}
+                ¿Confirmar +{pcCount} permanente de{" "}
                 {STAT_OPTIONS.find((s) => s.key === selectedStat)?.label} en {player.name}?
               </p>
               <div className="flex gap-2">

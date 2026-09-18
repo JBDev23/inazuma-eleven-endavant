@@ -32,7 +32,7 @@ export default function ResourcesPage() {
       setLoadError(null);
     }
     try {
-      const clubsData = await api.market.getUserClubs();
+      const clubsData = await api.market.getUserClubs({ forResources: true });
       const nextFingerprint = buildResourcesFingerprint(clubsData);
       if (nextFingerprint !== resourcesFingerprintRef.current) {
         resourcesFingerprintRef.current = nextFingerprint;

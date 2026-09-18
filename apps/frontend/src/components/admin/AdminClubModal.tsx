@@ -21,6 +21,7 @@ export default function AdminClubModal({ club, teams, onClose, onSave }: AdminCl
     pp: club.pp ?? 1000,
     baseTeamSlug: club.baseTeamSlug || "",
     shieldUrl: club.shieldUrl || "",
+    hiddenFromResources: club.hiddenFromResources ?? false,
   });
   
   const [isSaving, setIsSaving] = useState(false);
@@ -37,6 +38,7 @@ export default function AdminClubModal({ club, teams, onClose, onSave }: AdminCl
         pp: formData.pp,
         baseTeamSlug: formData.baseTeamSlug === "" ? null : formData.baseTeamSlug,
         shieldUrl: formData.shieldUrl.trim() || undefined,
+        hiddenFromResources: formData.hiddenFromResources,
       };
 
       if (isNew || formData.password.trim()) {
@@ -140,6 +142,21 @@ export default function AdminClubModal({ club, teams, onClose, onSave }: AdminCl
               className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-slate-300 text-sm font-mono focus:border-yellow-500 focus:outline-hidden"
             />
           </div>
+
+          <label className="flex items-start gap-3 rounded-lg border border-slate-700 bg-slate-950 p-3 cursor-pointer hover:border-slate-600 transition-colors">
+            <input
+              type="checkbox"
+              checked={formData.hiddenFromResources}
+              onChange={(e) => setFormData({ ...formData, hiddenFromResources: e.target.checked })}
+              className="mt-0.5 size-4 accent-yellow-500"
+            />
+            <span>
+              <span className="block text-xs font-bold text-slate-200 uppercase">Ocultar en Recursos</span>
+              <span className="block text-[10px] text-slate-500 mt-0.5 leading-snug">
+                El club seguirá disponible en mercado y admin, pero no aparecerá en la pantalla pública de Recursos.
+              </span>
+            </span>
+          </label>
 
           <div className="pt-4 flex gap-3">
             <button type="button" onClick={onClose} className="flex-1 p-3 rounded-lg font-bold text-slate-400 bg-slate-800 hover:bg-slate-700">CANCELAR</button>

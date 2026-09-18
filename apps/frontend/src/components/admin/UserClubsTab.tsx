@@ -68,6 +68,7 @@ export default function UserClubsTab() {
           baseTeamSlug: updatedData.baseTeamSlug,
           shieldUrl: updatedData.shieldUrl,
           pp: updatedData.pp,
+          hiddenFromResources: updatedData.hiddenFromResources,
         });
       }
       setEditingClub(null);
@@ -172,7 +173,14 @@ export default function UserClubsTab() {
                         <ClubShield shieldUrl={club.shieldUrl} alt={club.name} className="w-full h-full object-contain" />
                       </div>
                       <div className="min-w-0">
-                        <p className="font-black text-white text-base sm:text-lg truncate">{club.name}</p>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <p className="font-black text-white text-base sm:text-lg truncate">{club.name}</p>
+                          {club.hiddenFromResources ? (
+                            <span className="shrink-0 text-[9px] font-black uppercase tracking-wide text-slate-400 bg-slate-950 border border-slate-700 px-1.5 py-0.5 rounded">
+                              Oculto
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="text-[10px] text-slate-500 font-mono truncate">ID: {club.id}</p>
                         <div className="mt-1.5 space-y-1.5 md:hidden">
                           {club.baseTeamSlug ? (

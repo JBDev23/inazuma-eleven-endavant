@@ -1,3 +1,8 @@
+import {
+  DEFAULT_ECONOMY_PRICING,
+  type EconomyPricingSettings,
+} from './entity-pricing';
+
 export type FacilityId =
   | 'field'
   | 'stands'
@@ -78,16 +83,28 @@ export function getConstructionMap(facilities: ClubFacilityRecord[]): Partial<Re
   return map;
 }
 
-/** Coste en PP para subir de nivel N a N+1 */
+export type FacilityUpgradeCosts = Pick<
+  EconomyPricingSettings,
+  'facilityUpgradeCostFrom0' | 'facilityUpgradeCostFrom1' | 'facilityUpgradeCostFrom2'
+>;
+
+/** Costes por defecto en YE para subir de nivel N a N+1 */
 export const FACILITY_UPGRADE_COSTS: Record<FacilityLevel, number | null> = {
-  0: 800,
-  1: 2000,
-  2: 5000,
+  0: DEFAULT_ECONOMY_PRICING.facilityUpgradeCostFrom0,
+  1: DEFAULT_ECONOMY_PRICING.facilityUpgradeCostFrom1,
+  2: DEFAULT_ECONOMY_PRICING.facilityUpgradeCostFrom2,
   3: null,
 };
 
-export function getUpgradeCost(currentLevel: FacilityLevel): number | null {
-  return FACILITY_UPGRADE_COSTS[currentLevel];
+/** Coste en YE para subir de nivel N a N+1 (usa GameSettings si se pasa). */
+export function getUpgradeCost(
+  currentLevel: FacilityLevel,
+  costs: FacilityUpgradeCosts = DEFAULT_ECONOMY_PRICING,
+): number | null {
+  if (currentLevel === 0) return costs.facilityUpgradeCostFrom0;
+  if (currentLevel === 1) return costs.facilityUpgradeCostFrom1;
+  if (currentLevel === 2) return costs.facilityUpgradeCostFrom2;
+  return null;
 }
 
 export type FacilityBenefit = {

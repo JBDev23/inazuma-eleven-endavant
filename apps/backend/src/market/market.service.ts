@@ -141,9 +141,10 @@ export class MarketService {
         });
     }
 
-    async getUserClubs() {
+    async getUserClubs(options?: { forResources?: boolean }) {
         const [clubs, economy] = await Promise.all([
             this.prisma.userClub.findMany({
+                where: options?.forResources ? { hiddenFromResources: false } : undefined,
                 include: clubWithDetailsInclude,
             }),
             getEconomyPricing(this.prisma),
@@ -171,6 +172,7 @@ export class MarketService {
         pe?: number;
         yens?: number;
         pc?: number;
+        hiddenFromResources?: boolean;
     }) {
         const name = data.name.trim();
         if (!name) {
@@ -202,6 +204,9 @@ export class MarketService {
                 ...(data.pe !== undefined ? { pe: data.pe } : {}),
                 ...(data.yens !== undefined ? { yens: data.yens } : {}),
                 ...(data.pc !== undefined ? { pc: data.pc } : {}),
+                ...(data.hiddenFromResources !== undefined
+                    ? { hiddenFromResources: data.hiddenFromResources }
+                    : {}),
             },
             include: clubWithDetailsInclude,
         });
@@ -1117,20 +1122,21 @@ export class MarketService {
         baseTeamSlug?: string | null;
         shieldUrl?: string | null;
         activeCoachId?: number | null;
+        hiddenFromResources?: boolean;
     }) {
         const existingClub = await this.prisma.userClub.findUnique({
           where: { id },
         });
-    
+
         if (!existingClub) {
           throw new NotFoundException(`El club con ID ${id} no existe.`);
         }
-    
+
         if (updateData.name && updateData.name !== existingClub.name) {
           const nameInUse = await this.prisma.userClub.findUnique({
             where: { name: updateData.name },
           });
-    
+
           if (nameInUse) {
             throw new ConflictException(
               `El nombre "${updateData.name}" ya está siendo utilizado por otro club.`
@@ -1145,6 +1151,9 @@ export class MarketService {
         if (updateData.baseTeamSlug !== undefined) data.baseTeamSlug = updateData.baseTeamSlug;
         if (updateData.shieldUrl !== undefined && updateData.shieldUrl !== null) {
           data.shieldUrl = updateData.shieldUrl;
+        }
+        if (updateData.hiddenFromResources !== undefined) {
+          data.hiddenFromResources = updateData.hiddenFromResources;
         }
 
         if (updateData.password !== undefined) {
@@ -1395,9 +1404,18 @@ export class MarketService {
         });
     }
 
-    async spendPc(clubId: string, playerId: number, statKey: StatKey): Promise<SpendPcResult> {
+    async spendPc(
+        clubId: string,
+        playerId: number,
+        statKey: StatKey,
+        amount: number = 1,
+    ): Promise<SpendPcResult> {
         if (!STAT_KEYS.includes(statKey)) {
             throw new BadRequestException(`Stat inválida: ${statKey}`);
+        }
+
+        if (!Number.isInteger(amount) || amount < 1) {
+            throw new BadRequestException('La cantidad de mejora debe ser un entero positivo.');
         }
 
         const club = await this.prisma.userClub.findUnique({
@@ -1426,17 +1444,19 @@ export class MarketService {
             club.pc,
             currentBonuses,
             PC_COST_PER_STAT,
+            amount,
         );
 
         if (preview.warnings.length > 0) {
             throw new BadRequestException(preview.warnings.join(' '));
         }
 
-        const newBonuses = mergeStatBonus(currentBonuses, statKey);
+        const totalCost = preview.pcCost;
+        const newBonuses = mergeStatBonus(currentBonuses, statKey, amount);
 
         return this.prisma.$transaction(async (tx) => {
             const freshClub = await tx.userClub.findUnique({ where: { id: clubId } });
-            if (!freshClub || freshClub.pc < PC_COST_PER_STAT) {
+            if (!freshClub || freshClub.pc < totalCost) {
                 throw new BadRequestException(`No tienes suficientes PC. Disponibles: ${freshClub?.pc ?? 0}.`);
             }
 
@@ -1468,15 +1488,15 @@ export class MarketService {
                 data: {
                     clubId,
                     type: 'INTERNAL',
-                    description: `Mejora permanente +1 ${statLabels[statKey]} en ${player.name}`,
-                    amountPC: -PC_COST_PER_STAT,
+                    description: `Mejora permanente +${amount} ${statLabels[statKey]} en ${player.name}`,
+                    amountPC: -totalCost,
                     amountPP: 0,
                     amountPE: 0,
                     amountYens: 0,
                 },
             });
 
-            const newPcBalance = freshClub.pc - PC_COST_PER_STAT;
+            const newPcBalance = freshClub.pc - totalCost;
             await tx.userClub.update({
                 where: { id: clubId },
                 data: { pc: newPcBalance },
@@ -1749,27 +1769,28 @@ export class MarketService {
                 throw new BadRequestException('La instalación ya está al nivel máximo.');
             }
 
-            const cost = getUpgradeCost(currentLevel);
+            const economy = await getEconomyPricing(tx);
+            const cost = getUpgradeCost(currentLevel, economy);
             if (cost == null) {
                 throw new BadRequestException('No se puede mejorar más esta instalación.');
             }
 
-            if (club.pp < cost) {
-                throw new BadRequestException(`No tienes suficientes PP. Necesitas ${cost}.`);
+            if (club.yens < cost) {
+                throw new BadRequestException(`No tienes suficientes YE. Necesitas ${cost}.`);
             }
 
             const targetLevel = (currentLevel + 1) as FacilityLevel;
 
             await tx.userClub.update({
                 where: { id: clubId },
-                data: { pp: { decrement: cost } },
+                data: { yens: { decrement: cost } },
             });
 
             await tx.transaction.create({
                 data: {
                     clubId,
                     description: `Obra: ${FACILITY_LABELS[facilityId]} → Nv.${targetLevel}`,
-                    amountPP: -cost,
+                    amountYens: -cost,
                 },
             });
 
@@ -1781,7 +1802,7 @@ export class MarketService {
             return {
                 success: true,
                 facility: formatClubFacility(updated),
-                newBalance: club.pp - cost,
+                newBalance: club.yens - cost,
             };
         });
     }

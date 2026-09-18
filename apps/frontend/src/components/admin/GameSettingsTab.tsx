@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
 import { api, getApiErrorMessage } from "@/services/api";
-import { computePachangaXpBounds, type GameSettings, type SessionXpConfig } from "@inazuma/shared";
+import { computePachangaXpBounds, DEFAULT_ECONOMY_PRICING, type GameSettings, type SessionXpConfig } from "@inazuma/shared";
 
 const emptySessionForm = (): SessionXpConfig => ({
   session: 1,
@@ -19,11 +19,20 @@ export default function GameSettingsTab() {
   const [settings, setSettings] = useState<GameSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentSession, setCurrentSession] = useState(1);
-  const [basePlayerPrice, setBasePlayerPrice] = useState(15);
-  const [playerPricePerLevel, setPlayerPricePerLevel] = useState(5);
-  const [baseCoachPrice, setBaseCoachPrice] = useState(30);
-  const [coachPricePerLevel, setCoachPricePerLevel] = useState(10);
-  const [playerPricePerPc, setPlayerPricePerPc] = useState(1);
+  const [basePlayerPrice, setBasePlayerPrice] = useState(DEFAULT_ECONOMY_PRICING.basePlayerPrice);
+  const [playerPricePerLevel, setPlayerPricePerLevel] = useState(DEFAULT_ECONOMY_PRICING.playerPricePerLevel);
+  const [baseCoachPrice, setBaseCoachPrice] = useState(DEFAULT_ECONOMY_PRICING.baseCoachPrice);
+  const [coachPricePerLevel, setCoachPricePerLevel] = useState(DEFAULT_ECONOMY_PRICING.coachPricePerLevel);
+  const [playerPricePerPc, setPlayerPricePerPc] = useState(DEFAULT_ECONOMY_PRICING.playerPricePerPc);
+  const [facilityUpgradeCostFrom0, setFacilityUpgradeCostFrom0] = useState(
+    DEFAULT_ECONOMY_PRICING.facilityUpgradeCostFrom0,
+  );
+  const [facilityUpgradeCostFrom1, setFacilityUpgradeCostFrom1] = useState(
+    DEFAULT_ECONOMY_PRICING.facilityUpgradeCostFrom1,
+  );
+  const [facilityUpgradeCostFrom2, setFacilityUpgradeCostFrom2] = useState(
+    DEFAULT_ECONOMY_PRICING.facilityUpgradeCostFrom2,
+  );
   const [sessionForm, setSessionForm] = useState<SessionXpConfig>(emptySessionForm);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -42,6 +51,9 @@ export default function GameSettingsTab() {
       setBaseCoachPrice(data.baseCoachPrice);
       setCoachPricePerLevel(data.coachPricePerLevel);
       setPlayerPricePerPc(data.playerPricePerPc);
+      setFacilityUpgradeCostFrom0(data.facilityUpgradeCostFrom0);
+      setFacilityUpgradeCostFrom1(data.facilityUpgradeCostFrom1);
+      setFacilityUpgradeCostFrom2(data.facilityUpgradeCostFrom2);
     } catch (error) {
       console.error(error);
       const message =
@@ -69,6 +81,9 @@ export default function GameSettingsTab() {
         baseCoachPrice,
         coachPricePerLevel,
         playerPricePerPc,
+        facilityUpgradeCostFrom0,
+        facilityUpgradeCostFrom1,
+        facilityUpgradeCostFrom2,
       });
       setSettings(data);
       setActionSuccess("Configuración global guardada");
@@ -291,6 +306,63 @@ export default function GameSettingsTab() {
           className="flex w-full sm:w-auto items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-sm transition-colors"
         >
           <Save size={16} /> Guardar precios y sesión
+        </button>
+      </section>
+
+      <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 space-y-5">
+        <h2 className="text-lg font-black uppercase tracking-wider text-white">
+          Precios ciudad deportiva
+        </h2>
+        <p className="text-sm text-slate-500">
+          Coste en YE para mejorar cualquier instalación de un nivel al siguiente. Igual para
+          todos los edificios.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <label className="space-y-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-500">
+              Nv.0 → 1 (YE)
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={facilityUpgradeCostFrom0}
+              onChange={(e) => setFacilityUpgradeCostFrom0(Number(e.target.value))}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-500">
+              Nv.1 → 2 (YE)
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={facilityUpgradeCostFrom1}
+              onChange={(e) => setFacilityUpgradeCostFrom1(Number(e.target.value))}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-500">
+              Nv.2 → 3 (YE)
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={facilityUpgradeCostFrom2}
+              onChange={(e) => setFacilityUpgradeCostFrom2(Number(e.target.value))}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500"
+            />
+          </label>
+        </div>
+
+        <button
+          onClick={() => void handleSaveGlobal()}
+          disabled={saving}
+          className="flex w-full sm:w-auto items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-sm transition-colors"
+        >
+          <Save size={16} /> Guardar precios ciudad deportiva
         </button>
       </section>
 

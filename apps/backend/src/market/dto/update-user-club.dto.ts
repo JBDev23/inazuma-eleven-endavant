@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 
 export class UpdateUserClubDto {
   @IsOptional()
@@ -27,4 +27,8 @@ export class UpdateUserClubDto {
   @IsOptional()
   @IsInt()
   activeCoachId?: number | null;
+
+  @IsOptional()
+  @IsBoolean()
+  hiddenFromResources?: boolean;
 }

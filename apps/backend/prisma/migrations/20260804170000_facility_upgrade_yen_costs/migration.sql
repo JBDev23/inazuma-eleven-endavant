@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "GameSettings" ADD COLUMN "facilityUpgradeCostFrom0" INTEGER NOT NULL DEFAULT 800;
+ALTER TABLE "GameSettings" ADD COLUMN "facilityUpgradeCostFrom1" INTEGER NOT NULL DEFAULT 2000;
+ALTER TABLE "GameSettings" ADD COLUMN "facilityUpgradeCostFrom2" INTEGER NOT NULL DEFAULT 5000;
