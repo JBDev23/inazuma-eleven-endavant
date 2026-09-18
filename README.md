@@ -94,8 +94,8 @@ Aplicación para que los participantes pudieran canjear sus recursos, mejorar su
 Aplicación cliente especializada para usarse por los organizadores a pie de campo (en la mesa de chapas).
 
 <div align="center" style="display: flex; justify-content: center;" width="600">
-  <img src="./docs/game_view.PNG" alt="Vistazo general de la aplicación" width="300"/>
-  <img src="./docs/player_view.PNG" alt="Vistazo de la vista del jugador" width="300"/>
+  <img src="./docs/game_view.png" alt="Vistazo general de la aplicación" width="300"/>
+  <img src="./docs/player_view.png" alt="Vistazo de la vista del jugador" width="300"/>
 </div>
 <div align="center">
   <p><i>Vistazo general de la aplicación</i></p>
